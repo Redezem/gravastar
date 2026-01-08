@@ -1,0 +1,12 @@
+#!/sbin/openrc-run
+
+description="Gravastar DNS Server"
+command="/usr/local/bin/gravastar"
+command_args="-c /etc/gravastar"
+command_background="yes"
+
+pidfile="/run/gravastar.pid"
+
+start_pre() {
+    checkpath --directory --mode 0755 /run
+}

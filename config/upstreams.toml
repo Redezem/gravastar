@@ -1,0 +1,8 @@
+udp_servers = [
+  "9.9.9.9",
+  "1.1.1.1"
+]
+
+dot_servers = [
+  "dns.quad9.net"
+]

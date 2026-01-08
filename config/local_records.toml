@@ -1,0 +1,14 @@
+[[record]]
+name = "router.local"
+type = "A"
+value = "192.168.0.1"
+
+[[record]]
+name = "printer.local"
+type = "AAAA"
+value = "fe80::1"
+
+[[record]]
+name = "docs.local"
+type = "CNAME"
+value = "docs.example.com"

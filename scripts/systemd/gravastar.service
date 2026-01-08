@@ -1,0 +1,13 @@
+[Unit]
+Description=Gravastar DNS Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/gravastar -c /etc/gravastar
+Restart=on-failure
+User=gravastar
+Group=gravastar
+
+[Install]
+WantedBy=multi-user.target
