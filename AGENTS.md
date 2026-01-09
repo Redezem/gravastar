@@ -23,6 +23,7 @@ This codebase aims to stay portable across POSIX platforms (Linux/BSD/macOS).
   - `dns_server.cpp`: nonblocking UDP loop + worker pool
   - `dns_packet.cpp`: minimal DNS parsing/response building
   - `query_logger.cpp`: query logging + rotation
+  - `controller_logger.cpp`: process logging + rotation
   - `cache.cpp`: size/TTL-based cache
   - `blocklist.cpp`: domain blocklist lookup (suffix matches)
   - `upstream_blocklist.cpp`: upstream blocklist ingestion (libcurl)
@@ -56,6 +57,7 @@ This codebase aims to stay portable across POSIX platforms (Linux/BSD/macOS).
 - Sample configs in `config/` are used for development/testing.
 - DNS packets are handled by a worker pool (4 threads), with the main thread
   only reading from the UDP socket and enqueueing jobs.
+- Controller logs are written to `/var/log/gravastar/controller.log` by default.
 
 ## Configuration Schema (TOML)
 Main config (`gravastar.toml`):
@@ -123,7 +125,6 @@ Upstreams (`upstreams.toml`):
 - Sandbox environments may block sockets; integration tests may need
   elevated permissions.
 - Integration scripts ensure the server is ready by polling with `dig`.
- - Controller log output goes to `/var/log/gravastar/controller.log`.
 
 ## Troubleshooting
 - If the server fails to start, check bind address/port and permissions.
@@ -137,12 +138,10 @@ Upstreams (`upstreams.toml`):
 
 ## Concurrency and Safety
 - `DnsCache` is protected by a `pthread_mutex` in `DnsServer`.
-- `Blocklist` and `LocalRecords` are read-only after load.
+- `Blocklist` updates are protected by an RW lock; `LocalRecords` is read-only after load.
 - `UpstreamResolver` is stateless per request; uses UDP socket per query.
 
 ## Known Limitations / TODO
-- DoT support is not implemented; requires a TLS library (conflicts with strict
-  “standard libs only” goal, needs a design decision).
 - DNS parsing/serialization is minimal: single-question queries only, no
   compression in responses, fixed TTL in answers.
 - No TCP fallback or EDNS; only UDP.
