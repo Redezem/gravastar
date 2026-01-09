@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="Gravastar.png" alt="Gravastar" width="100%" />
+</p>
+
 # gravastar
 
 Gravastar is a POSIX-friendly, C++98 DNS server with blocklists, local records,
