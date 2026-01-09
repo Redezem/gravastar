@@ -2,6 +2,7 @@
 
 #include <arpa/inet.h>
 #include <cstring>
+#include <sys/socket.h>
 
 namespace gravastar {
 
