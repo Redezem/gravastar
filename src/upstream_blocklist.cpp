@@ -420,12 +420,15 @@ bool BuildBlocklistFromSources(const std::vector<std::string> &urls,
     for (size_t i = 0; i < urls.size(); ++i) {
         std::string content;
         std::string fetch_err;
+        LogInfo("Upstream blocklist fetch: " + urls[i]);
         bool fetched = FetchUrl(urls[i], &content, &fetch_err);
         std::string cache_path = CachePathForUrl(cache_dir, urls[i]);
         if (fetched) {
             WriteFile(cache_path, content, NULL);
+            LogInfo("Upstream blocklist fetched: " + urls[i]);
         } else if (FileExists(cache_path)) {
             content = ReadFile(cache_path);
+            LogWarn("Upstream fetch failed, using cached copy: " + urls[i] + " (" + fetch_err + ")");
         } else {
             if (err) {
                 *err = "failed to fetch url and no cache: " + urls[i];
@@ -493,21 +496,27 @@ bool UpstreamBlocklistUpdater::EnsureCacheDir() {
 
 bool UpstreamBlocklistUpdater::UpdateOnce() {
     if (!EnsureCacheDir()) {
+        LogError("Upstream blocklist cache dir missing: " + config_.cache_dir);
         return false;
     }
     std::set<std::string> domains;
     std::string err;
     if (!BuildBlocklistFromSources(config_.urls, config_.cache_dir, &domains, &err)) {
         DebugLog("Upstream blocklist update failed: " + err);
+        LogError("Upstream blocklist update failed: " + err);
         return false;
     }
     if (!WriteBlocklistToml(output_path_, domains, &err)) {
         DebugLog("Failed to write blocklist.toml: " + err);
+        LogError("Failed to write blocklist.toml: " + err);
         return false;
     }
     if (blocklist_) {
         blocklist_->SetDomains(domains);
     }
+    std::ostringstream out;
+    out << "Upstream blocklist updated: " << domains.size() << " domains";
+    LogInfo(out.str());
     return true;
 }
 
@@ -523,8 +532,10 @@ bool UpstreamBlocklistUpdater::Start() {
         pthread_mutex_lock(&mutex_);
         running_ = false;
         pthread_mutex_unlock(&mutex_);
+        LogError("Failed to start upstream blocklist thread");
         return false;
     }
+    LogInfo("Upstream blocklist updater started");
     return true;
 }
 
@@ -538,6 +549,7 @@ void UpstreamBlocklistUpdater::Stop() {
     pthread_cond_broadcast(&cv_);
     pthread_mutex_unlock(&mutex_);
     pthread_join(thread_, NULL);
+    LogInfo("Upstream blocklist updater stopped");
 }
 
 void *UpstreamBlocklistUpdater::ThreadEntry(void *arg) {
@@ -558,6 +570,7 @@ void UpstreamBlocklistUpdater::ThreadLoop() {
             break;
         }
         pthread_mutex_unlock(&mutex_);
+        LogInfo("Upstream blocklist periodic update");
         UpdateOnce();
         pthread_mutex_lock(&mutex_);
     }
