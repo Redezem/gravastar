@@ -4,9 +4,11 @@
 #include "dns_server.h"
 #include "local_records.h"
 #include "query_logger.h"
+#include "upstream_blocklist.h"
 #include "upstream_resolver.h"
 #include "util.h"
 
+#include <sys/stat.h>
 #include <cstdlib>
 #include <iostream>
 #include <set>
@@ -28,19 +30,24 @@ std::string JoinPath(const std::string &dir, const std::string &path) {
 }
 
 void PrintUsage(const char *argv0) {
-    std::cerr << "Usage: " << argv0 << " [-c config_dir] [-d]\n";
+    std::cerr << "Usage: " << argv0 << " [-c config_dir] [-u upstream_blocklists] [-d]\n";
 }
 
 } // namespace
 
 int main(int argc, char **argv) {
     std::string config_dir = "/etc/gravastar";
+    std::string upstream_blocklists_path;
+    bool upstream_path_forced = false;
     bool debug = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "-c" && i + 1 < argc) {
             config_dir = argv[++i];
+        } else if (arg == "-u" && i + 1 < argc) {
+            upstream_blocklists_path = argv[++i];
+            upstream_path_forced = true;
         } else if (arg == "-d" || arg == "--debug") {
             debug = true;
         } else if (arg == "-h" || arg == "--help") {
@@ -111,12 +118,48 @@ int main(int argc, char **argv) {
         log_dir = env_log_dir;
     }
     gravastar::QueryLogger logger(log_dir, 100 * 1024 * 1024);
-    gravastar::DnsServer server(config, blocklist, local_records, &cache,
+    gravastar::DnsServer server(config, &blocklist, local_records, &cache,
                                 resolver, &logger);
-    if (!server.Run()) {
-        std::cerr << "Failed to start DNS server\n";
+
+    bool upstream_mode = false;
+    if (upstream_blocklists_path.empty()) {
+        upstream_blocklists_path = JoinPath(config_dir, "upstream_blocklists.toml");
+    }
+    struct stat st;
+    if (stat(upstream_blocklists_path.c_str(), &st) == 0) {
+        upstream_mode = true;
+    } else if (upstream_path_forced) {
+        std::cerr << "Upstream blocklist config not found: "
+                  << upstream_blocklists_path << "\n";
         return 1;
     }
 
+    gravastar::UpstreamBlocklistUpdater *updater = NULL;
+    gravastar::UpstreamBlocklistConfig upstream_config;
+    if (upstream_mode) {
+        std::string err;
+        if (!gravastar::LoadUpstreamBlocklistConfig(upstream_blocklists_path,
+                                                    &upstream_config, &err)) {
+            std::cerr << "Upstream blocklist config error: " << err << "\n";
+            return 1;
+        }
+        updater = new gravastar::UpstreamBlocklistUpdater(
+            upstream_config, block_path, &blocklist);
+        updater->UpdateOnce();
+        updater->Start();
+    }
+    if (!server.Run()) {
+        std::cerr << "Failed to start DNS server\n";
+        if (updater) {
+            updater->Stop();
+            delete updater;
+        }
+        return 1;
+    }
+
+    if (updater) {
+        updater->Stop();
+        delete updater;
+    }
     return 0;
 }

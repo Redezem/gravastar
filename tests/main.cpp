@@ -6,6 +6,8 @@ bool TestDnsPacket();
 bool TestLoggingRotation();
 bool TestLoggingFailurePath();
 bool TestParseHostPort();
+bool TestUpstreamBlocklistParse();
+bool TestUpstreamBlocklistCacheFallback();
 
 int main() {
     int failures = 0;
@@ -31,6 +33,14 @@ int main() {
     }
     if (!TestParseHostPort()) {
         std::cerr << "TestParseHostPort failed\n";
+        failures++;
+    }
+    if (!TestUpstreamBlocklistParse()) {
+        std::cerr << "TestUpstreamBlocklistParse failed\n";
+        failures++;
+    }
+    if (!TestUpstreamBlocklistCacheFallback()) {
+        std::cerr << "TestUpstreamBlocklistCacheFallback failed\n";
         failures++;
     }
     if (failures == 0) {

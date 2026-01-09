@@ -55,7 +55,7 @@ std::string QTypeToString(unsigned short qtype) {
 
 } // namespace
 
-DnsServer::DnsServer(const ServerConfig &config, const Blocklist &blocklist,
+DnsServer::DnsServer(const ServerConfig &config, Blocklist *blocklist,
                      const LocalRecords &local_records, DnsCache *cache,
                      const UpstreamResolver &resolver, QueryLogger *logger)
     : config_(config), blocklist_(blocklist), local_records_(local_records),
@@ -245,7 +245,7 @@ bool DnsServer::ResolveQuery(const std::vector<unsigned char> &packet,
   result->upstream.clear();
   result->source = RESOLVE_NONE;
 
-  if (blocklist_.IsBlocked(question.qname)) {
+  if (blocklist_ && blocklist_->IsBlocked(question.qname)) {
     DebugLog("Blocklist match");
     result->source = RESOLVE_BLOCKLIST;
     if (question.qtype == DNS_TYPE_A) {

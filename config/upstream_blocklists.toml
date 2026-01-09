@@ -1,0 +1,5 @@
+update_interval_sec = 3600
+cache_dir = "/var/gravastar"
+urls = [
+  "https://example.com/hosts.txt"
+]

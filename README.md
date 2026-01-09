@@ -10,7 +10,8 @@ cmake -S . -B build
 cmake --build build
 ```
 
-LibreSSL (libtls) is required for DNS-over-TLS.
+LibreSSL (libtls) is required for DNS-over-TLS. libcurl is required for
+upstream blocklist ingestion.
 
 ## Run
 
@@ -18,8 +19,14 @@ LibreSSL (libtls) is required for DNS-over-TLS.
 ./build/gravastar -c ./config
 ```
 
+Use `-u /path/to/upstream_blocklists.toml` to enable upstream blocklist updates
+from a custom location.
+
 Configuration is TOML and defaults to `/etc/gravastar` when no `-c` argument is
 provided. Example configs live in `config`.
+
+Optional upstream blocklist ingestion is enabled when
+`/etc/gravastar/upstream_blocklists.toml` exists (or via `-u`).
 
 ## Install
 
@@ -39,6 +46,27 @@ Query logs are written to `/var/log/gravastar` by default:
 
 Log files rotate at 100MB, are gz-compressed, and keep up to 10 archives per
 log type. For development/testing, set `GRAVASTAR_LOG_DIR` to redirect logs.
+
+## Upstream blocklists
+
+To ingest Pi-hole style upstream blocklists, create
+`/etc/gravastar/upstream_blocklists.toml` (or pass `-u` with a custom path).
+The updater runs at launch and then periodically (default hourly), caching
+upstream files in `/var/gravastar` and rewriting `blocklist.toml`.
+
+Example:
+
+```toml
+update_interval_sec = 3600
+cache_dir = "/var/gravastar"
+urls = [
+  "https://example.com/hosts.txt",
+  "https://example.com/domains.txt",
+  "https://example.com/abp.txt",
+]
+```
+
+Supported formats: hosts-style, domain-per-line, and simple ABP `||domain^`.
 
 ## Notes
 

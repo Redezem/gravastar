@@ -10,6 +10,7 @@ This codebase aims to stay portable across POSIX platforms (Linux/BSD/macOS).
 - Core DNS server flow is implemented: blocklist -> local records -> cache ->
   DoT upstream (if configured) -> UDP upstream.
 - DNS-over-TLS (DoT) is implemented via LibreSSL/libtls.
+- Optional upstream blocklist ingestion is implemented via libcurl.
 - Server loop is nonblocking and uses a worker thread pool with a synchronized
   job queue.
 - Cache access is protected by a mutex for thread safety.
@@ -24,12 +25,14 @@ This codebase aims to stay portable across POSIX platforms (Linux/BSD/macOS).
   - `query_logger.cpp`: query logging + rotation
   - `cache.cpp`: size/TTL-based cache
   - `blocklist.cpp`: domain blocklist lookup (suffix matches)
+  - `upstream_blocklist.cpp`: upstream blocklist ingestion (libcurl)
   - `local_records.cpp`: local A/AAAA/CNAME records
   - `config.cpp`: minimal TOML parser for project configs
   - `upstream_resolver.cpp`: UDP/DoT recursive resolver (LibreSSL)
 - `tests/`: unit tests + integration script
   - `integration_dig.sh`: spins up server and queries via `dig`
   - `integration_dot.sh`: DoT-only integration test via `dig`
+  - `integration_upstream_blocklist.sh`: upstream blocklist integration test
 - `config/`: sample TOML configs
 - `scripts/`: service files for systemd and OpenRC
 
@@ -37,16 +40,19 @@ This codebase aims to stay portable across POSIX platforms (Linux/BSD/macOS).
 - Build:
   - `cmake -S . -B build`
   - `cmake --build build`
+  - Requires LibreSSL (libtls) and libcurl.
 - Unit tests:
   - `ctest --test-dir build -R gravastar_tests`
 - Integration tests (need network access and `dig`):
   - `ctest --test-dir build -R gravastar_integration -V`
   - `ctest --test-dir build -R gravastar_integration_dot -V`
+  - `ctest --test-dir build -R gravastar_integration_upstream_blocklist -V`
 - Integration tests create a temp config dir under `/tmp` and bind to
-  `127.0.0.1:18053`/`127.0.0.1:18054`. If these ports are in use, tests fail.
+  `127.0.0.1:18053`/`127.0.0.1:18054`/`127.0.0.1:18055`. If these ports are in use, tests fail.
 
 ## Runtime Notes
 - Default config dir is `/etc/gravastar` (override with `-c`).
+- Use `-u` to point to a custom `upstream_blocklists.toml`.
 - Sample configs in `config/` are used for development/testing.
 - DNS packets are handled by a worker pool (4 threads), with the main thread
   only reading from the UDP socket and enqueueing jobs.
@@ -61,6 +67,11 @@ Main config (`gravastar.toml`):
 - `blocklist_file` (string): relative path to blocklist TOML
 - `local_records_file` (string): relative path to local records TOML
 - `upstreams_file` (string): relative path to upstreams TOML
+
+Upstream blocklists (`upstream_blocklists.toml`):
+- `update_interval_sec` (int): update interval in seconds, default `3600`
+- `cache_dir` (string): cache directory, default `/var/gravastar`
+- `urls` (array of strings): upstream list URLs
 
 Blocklist (`blocklist.toml`):
 - `domains` (array of strings): domains to blackhole; matching is suffix-based
@@ -84,13 +95,14 @@ Upstreams (`upstreams.toml`):
 4. Cache: lookup full response packet by key `qname|qtype`.
 5. Upstream: forward full query over DoT to the first DoT server (if configured),
    else UDP to the first upstream server, cache response, and return.
+6. Optional upstream blocklist updater writes `blocklist.toml` and reloads it.
 
 ## Concurrency and Synchronization
 - Main thread: `select` + `recvfrom` on a nonblocking UDP socket.
 - Worker threads: drain a shared queue, process queries, and send responses.
 - Queue is protected by `queue_mutex_` and `queue_cv_`.
 - Cache uses `cache_mutex_` around `Get`/`Put`.
-- `Blocklist` and `LocalRecords` are read-only after load.
+- `Blocklist` updates are protected by an RW lock; `LocalRecords` is read-only after load.
 
 ## DNS Protocol Notes
 - UDP and DoT are supported for upstream recursion.
@@ -137,6 +149,7 @@ Upstreams (`upstreams.toml`):
 - No hot reload of configs.
  - No IPv6 listener support (server binds IPv4 only).
  - Logging is file-based; no structured log levels beyond query logs.
+ - Upstream blocklist updater does not merge with local blocklist overrides.
 
 ## Suggested Next Steps
 1. Improve DNS protocol coverage (compression, multi-question handling, error

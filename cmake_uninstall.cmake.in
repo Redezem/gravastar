@@ -33,3 +33,7 @@ if(EXISTS "/etc/gravastar")
         file(REMOVE_RECURSE "/etc/gravastar")
     endif()
 endif()
+
+if(EXISTS "/var/gravastar")
+    file(REMOVE_RECURSE "/var/gravastar")
+endif()

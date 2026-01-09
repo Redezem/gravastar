@@ -19,7 +19,7 @@ namespace gravastar {
 class DnsServer {
 public:
     DnsServer(const ServerConfig &config,
-              const Blocklist &blocklist,
+              Blocklist *blocklist,
               const LocalRecords &local_records,
               DnsCache *cache,
               const UpstreamResolver &resolver,
@@ -64,7 +64,7 @@ private:
     void WorkerLoop();
 
     ServerConfig config_;
-    Blocklist blocklist_;
+    Blocklist *blocklist_;
     LocalRecords local_records_;
     DnsCache *cache_;
     UpstreamResolver resolver_;
