@@ -45,3 +45,28 @@ install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/config/upstreams.toml
     DESTINATION /etc/gravastar
 )
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    install(CODE [[
+        if(EXISTS "/run/systemd/system")
+            file(INSTALL
+                DESTINATION "/etc/systemd/system"
+                TYPE FILE
+                FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/systemd/gravastar.service"
+            )
+        elseif(EXISTS "/sbin/openrc-run" OR EXISTS "/sbin/rc-service" OR EXISTS "/etc/init.d")
+            file(INSTALL
+                DESTINATION "/etc/init.d"
+                TYPE PROGRAM
+                FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/openrc/gravastar"
+            )
+        else()
+            message(STATUS "No supported Linux init system detected; skipping service install.")
+        endif()
+    ]])
+elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
+    install(PROGRAMS
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/openbsd/gravastar
+        DESTINATION /etc/rc.d
+    )
+endif()
