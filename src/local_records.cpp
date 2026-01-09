@@ -16,7 +16,7 @@ std::string MakeKey(const std::string &name, unsigned short qtype) {
     }
     key.append("|");
     char buf[16];
-    std::sprintf(buf, "%u", static_cast<unsigned int>(qtype));
+    std::snprintf(buf, 16, "%u", static_cast<unsigned int>(qtype));
     key.append(buf);
     return key;
 }
