@@ -1,0 +1,12 @@
+#!/bin/ksh
+#
+# $OpenBSD: gravastar! Ahhhhh that's all kiddo.
+
+daemon="/usr/local/bin/gravastar"
+
+. /etc/rc.d/rc.subr
+
+rc_reload=NO
+
+rc_cmd $1
+
