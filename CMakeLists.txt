@@ -6,6 +6,24 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Threads REQUIRED)
+find_package(PkgConfig)
+if(APPLE AND PKG_CONFIG_FOUND)
+    set(ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:/opt/homebrew/opt/libressl/lib/pkgconfig")
+    pkg_check_modules(LIBRESSL libtls)
+endif()
+if(LIBRESSL_FOUND)
+    set(GRAVASTAR_TLS_LIBS ${LIBRESSL_LIBRARIES} ${LIBRESSL_LDFLAGS_OTHER})
+    set(GRAVASTAR_TLS_INCLUDES ${LIBRESSL_INCLUDE_DIRS})
+    link_directories(${LIBRESSL_LIBRARY_DIRS})
+else()
+    find_library(LIBTLS tls)
+    find_library(LIBSSL ssl)
+    find_library(LIBCRYPTO crypto)
+    if(NOT LIBTLS OR NOT LIBSSL OR NOT LIBCRYPTO)
+        message(FATAL_ERROR "LibreSSL libraries not found (tls, ssl, crypto required).")
+    endif()
+    set(GRAVASTAR_TLS_LIBS ${LIBTLS} ${LIBSSL} ${LIBCRYPTO})
+endif()
 
 add_library(gravastar_core
     src/blocklist.cpp
@@ -19,8 +37,8 @@ add_library(gravastar_core
     src/util.cpp
 )
 
-target_include_directories(gravastar_core PUBLIC src)
-target_link_libraries(gravastar_core PUBLIC Threads::Threads)
+target_include_directories(gravastar_core PUBLIC src ${GRAVASTAR_TLS_INCLUDES})
+target_link_libraries(gravastar_core PUBLIC Threads::Threads ${GRAVASTAR_TLS_LIBS})
 
 add_executable(gravastar src/main.cpp)
 target_link_libraries(gravastar gravastar_core)
@@ -31,13 +49,16 @@ add_executable(gravastar_tests
     tests/test_config.cpp
     tests/test_dns_packet.cpp
     tests/test_logging.cpp
+    tests/test_upstream.cpp
 )
 target_link_libraries(gravastar_tests gravastar_core)
 
 enable_testing()
 add_test(NAME gravastar_tests COMMAND gravastar_tests)
 add_test(NAME gravastar_integration COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration_dig.sh $<TARGET_FILE:gravastar>)
+add_test(NAME gravastar_integration_dot COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration_dot.sh $<TARGET_FILE:gravastar>)
 set_tests_properties(gravastar_integration PROPERTIES TIMEOUT 10)
+set_tests_properties(gravastar_integration_dot PROPERTIES TIMEOUT 30)
 
 install(TARGETS gravastar RUNTIME DESTINATION /usr/local/bin)
 install(FILES

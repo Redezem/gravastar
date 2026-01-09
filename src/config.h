@@ -12,6 +12,7 @@ struct ServerConfig {
     unsigned short listen_port;
     size_t cache_size_bytes;
     unsigned int cache_ttl_sec;
+    bool dot_verify;
     std::string blocklist_file;
     std::string local_records_file;
     std::string upstreams_file;

@@ -33,6 +33,22 @@ bool ParseInteger(const std::string &raw, unsigned long *out) {
     return true;
 }
 
+bool ParseBool(const std::string &raw, bool *out) {
+    if (!out) {
+        return false;
+    }
+    std::string v = ToLower(Trim(raw));
+    if (v == "true") {
+        *out = true;
+        return true;
+    }
+    if (v == "false") {
+        *out = false;
+        return true;
+    }
+    return false;
+}
+
 bool ParseStringArray(const std::string &raw, std::vector<std::string> *out) {
     std::string s = Trim(raw);
     if (s.size() < 2 || s[0] != '[' || s[s.size() - 1] != ']') {
@@ -94,6 +110,7 @@ bool ConfigLoader::LoadMainConfig(const std::string &path, ServerConfig *out, st
     out->listen_port = 53;
     out->cache_size_bytes = 100 * 1024 * 1024;
     out->cache_ttl_sec = 120;
+    out->dot_verify = true;
     out->blocklist_file = "blocklist.toml";
     out->local_records_file = "local_records.toml";
     out->upstreams_file = "upstreams.toml";
@@ -142,6 +159,13 @@ bool ConfigLoader::LoadMainConfig(const std::string &path, ServerConfig *out, st
                 return false;
             }
             out->cache_ttl_sec = static_cast<unsigned int>(v);
+        } else if (key == "dot_verify") {
+            bool v = true;
+            if (!ParseBool(value, &v)) {
+                if (err) *err = "invalid dot_verify";
+                return false;
+            }
+            out->dot_verify = v;
         } else if (key == "blocklist_file") {
             std::string v;
             if (!ParseQuotedString(value, &v)) {

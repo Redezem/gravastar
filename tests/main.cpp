@@ -5,6 +5,7 @@ bool TestConfig();
 bool TestDnsPacket();
 bool TestLoggingRotation();
 bool TestLoggingFailurePath();
+bool TestParseHostPort();
 
 int main() {
     int failures = 0;
@@ -26,6 +27,10 @@ int main() {
     }
     if (!TestLoggingFailurePath()) {
         std::cerr << "TestLoggingFailurePath failed\n";
+        failures++;
+    }
+    if (!TestParseHostPort()) {
+        std::cerr << "TestParseHostPort failed\n";
         failures++;
     }
     if (failures == 0) {

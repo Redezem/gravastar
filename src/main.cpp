@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
     }
 
     if (!dot_servers.empty()) {
-        std::cerr << "Note: DoT servers configured but TLS is not implemented yet.\n";
+        gravastar::DebugLog("DoT servers configured.");
     }
 
     gravastar::Blocklist blocklist;
@@ -103,6 +103,7 @@ int main(int argc, char **argv) {
     gravastar::UpstreamResolver resolver;
     resolver.SetUdpServers(udp_servers);
     resolver.SetDotServers(dot_servers);
+    resolver.SetDotVerify(config.dot_verify);
 
     std::string log_dir = "/var/log/gravastar";
     const char *env_log_dir = std::getenv("GRAVASTAR_LOG_DIR");

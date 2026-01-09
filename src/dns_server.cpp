@@ -290,16 +290,18 @@ bool DnsServer::ResolveQuery(const std::vector<unsigned char> &packet,
   }
 
   result->source = RESOLVE_UPSTREAM;
-  if (resolver_.ResolveUdp(packet, &result->response, &result->upstream)) {
+  if (resolver_.ResolveDot(packet, &result->response, &result->upstream)) {
+    DebugLog("DoT resolution success");
+  } else if (resolver_.ResolveUdp(packet, &result->response, &result->upstream)) {
     DebugLog("Upstream resolution success");
-    if (cache_) {
-      pthread_mutex_lock(&cache_mutex_);
-      cache_->Put(key, result->response);
-      pthread_mutex_unlock(&cache_mutex_);
-    }
   } else {
     DebugLog("Upstream resolution failed");
     result->response = BuildEmptyResponse(header, question);
+  }
+  if (!result->response.empty() && cache_) {
+    pthread_mutex_lock(&cache_mutex_);
+    cache_->Put(key, result->response);
+    pthread_mutex_unlock(&cache_mutex_);
   }
   return true;
 }

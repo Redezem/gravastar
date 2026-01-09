@@ -27,6 +27,7 @@ bool TestConfig() {
                    "listen_port = 8053\n"
                    "cache_size_mb = 1\n"
                    "cache_ttl_sec = 10\n"
+                   "dot_verify = false\n"
                    "blocklist_file = \"blocklist.toml\"\n"
                    "local_records_file = \"local_records.toml\"\n"
                    "upstreams_file = \"upstreams.toml\"\n")) {
@@ -57,6 +58,9 @@ bool TestConfig() {
         return false;
     }
     if (cfg.listen_port != 8053) {
+        return false;
+    }
+    if (cfg.dot_verify) {
         return false;
     }
 
