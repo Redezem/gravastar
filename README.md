@@ -2,10 +2,20 @@
   <img src="Gravastar.png" alt="Gravastar" width="100%" />
 </p>
 
-# gravastar
+<p align="center">
+	<i>The alternative theory to PiHoles...</i>
+</p>
+
+# Gravastar
 
 Gravastar is a POSIX-friendly, C++98 DNS server with blocklists, local records,
-an in-memory cache, and recursive UDP/DoT forwarding.
+an in-memory cache, and recursive UDP/DoT forwarding. Gravastar is designed to be an alternative to PiHole for systems that won't run it/people that don't want to run it.
+
+## But Why?
+
+I'll be honest, I've got a year long project (CE 2026) to move as much of my homelab to OpenBSD as possible. PiHole is my home DNS server, and is also deeply reliant on the Linux ecosystem. This is fine and all, but it wasn't going to work on OpenBSD.
+
+You know what would? A from-scratch POSIX compliant C++98 program that does roughly the same thing. So here we are.
 
 ## Build
 
@@ -42,6 +52,12 @@ The install target places `gravastar` in `/usr/local/bin` and default configs in
 `/etc/gravastar`. Linux installs service scripts for systemd or OpenRC when
 detected.
 
+Install should also detect which kind of service system you're using (systemd/openrc... or rc.d if you're OpenBSD like me) and attach a service accordingly. YMMV.
+
+## Releases
+
+Are none, not planned to have any, please compile this yourself. If you can't, go use PiHole.
+
 ## Logging
 
 Query logs are written to `/var/log/gravastar` by default:
@@ -71,7 +87,7 @@ urls = [
 ]
 ```
 
-Supported formats: hosts-style, domain-per-line, and simple ABP `||domain^`.
+Supported formats: hosts-style, domain-per-line, and simple ABP `||domain^`. This should allow you to drop PiHole upstream targets in to Gravastar and for it to *just work*.
 
 ## Notes
 
