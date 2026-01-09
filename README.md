@@ -43,6 +43,7 @@ detected.
 Query logs are written to `/var/log/gravastar` by default:
 - `pass.log` for successful resolutions
 - `block.log` for blocklisted queries
+- `controller.log` for process logging (level-controlled)
 
 Log files rotate at 100MB, are gz-compressed, and keep up to 10 archives per
 log type. For development/testing, set `GRAVASTAR_LOG_DIR` to redirect logs.
@@ -71,5 +72,7 @@ Supported formats: hosts-style, domain-per-line, and simple ABP `||domain^`.
 ## Notes
 
 - `dot_verify` in `gravastar.toml` controls TLS verification for DoT.
+- `log_level` in `gravastar.toml` controls controller logging verbosity
+  (`debug`, `info`, `warn`, `error`), default `debug`.
 - For DoT, upstreams can be specified as `host@ip:port` to use SNI hostname
   while connecting to a specific IP.

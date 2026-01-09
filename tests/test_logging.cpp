@@ -1,4 +1,6 @@
 #include "query_logger.h"
+#include "controller_logger.h"
+#include "util.h"
 
 #include <dirent.h>
 #include <sys/stat.h>
@@ -6,6 +8,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -123,4 +126,59 @@ bool TestLoggingFailurePath() {
                              "external", "9.9.9.9");
     RemoveTree(dir);
     return !ok;
+}
+
+bool TestControllerLoggerRotation() {
+    std::string dir = MakeTempDir();
+    if (dir.empty()) {
+        return false;
+    }
+    {
+        gravastar::ControllerLogger logger(dir, 100);
+        for (int i = 0; i < 25; ++i) {
+            if (!logger.Log(gravastar::LOG_INFO, "controller message")) {
+                RemoveTree(dir);
+                return false;
+            }
+        }
+    }
+    size_t count = CountFilesWithSuffix(dir, "_controller.log.gz");
+    if (count > 10) {
+        RemoveTree(dir);
+        return false;
+    }
+    struct stat st;
+    std::string path = dir + "/controller.log";
+    if (stat(path.c_str(), &st) != 0) {
+        RemoveTree(dir);
+        return false;
+    }
+    RemoveTree(dir);
+    return true;
+}
+
+bool TestControllerLogLevelFilter() {
+    std::string dir = MakeTempDir();
+    if (dir.empty()) {
+        return false;
+    }
+    gravastar::ControllerLogger logger(dir, 1024);
+    gravastar::SetControllerLogger(&logger);
+    gravastar::SetLogLevel(gravastar::LOG_WARN);
+    gravastar::LogInfo("info message");
+    gravastar::LogError("error message");
+    std::string path = dir + "/controller.log";
+    std::ifstream in(path.c_str());
+    if (!in.is_open()) {
+        RemoveTree(dir);
+        return false;
+    }
+    std::string contents;
+    std::getline(in, contents);
+    bool has_error = contents.find("error message") != std::string::npos;
+    bool has_info = contents.find("info message") != std::string::npos;
+    gravastar::SetControllerLogger(NULL);
+    gravastar::SetLogLevel(gravastar::LOG_DEBUG);
+    RemoveTree(dir);
+    return has_error && !has_info;
 }

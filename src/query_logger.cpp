@@ -1,4 +1,5 @@
 #include "query_logger.h"
+#include "util.h"
 
 #include <cerrno>
 #include <cstring>
@@ -74,8 +75,7 @@ bool QueryLogger::EnsureDirectory() {
     if (IsDir(dir_)) {
         return true;
     }
-    std::cerr << "Failed to create log dir " << dir_ << ": "
-              << std::strerror(errno) << "\n";
+    LogError("Failed to create log dir " + dir_ + ": " + std::strerror(errno));
     return false;
 }
 
@@ -88,8 +88,7 @@ bool QueryLogger::EnsureOpen(LogFile *log) {
     }
     log->file = std::fopen(log->path.c_str(), "a");
     if (!log->file) {
-        std::cerr << "Failed to open log file " << log->path << ": "
-                  << std::strerror(errno) << "\n";
+        LogError("Failed to open log file " + log->path + ": " + std::strerror(errno));
         return false;
     }
     return true;
@@ -112,12 +111,11 @@ bool QueryLogger::RotateIfNeeded(LogFile *log) {
     }
     std::string rotated = UniqueRotatedName(log->name);
     if (rename(log->path.c_str(), rotated.c_str()) != 0) {
-        std::cerr << "Failed to rotate log file " << log->path << ": "
-                  << std::strerror(errno) << "\n";
+        LogError("Failed to rotate log file " + log->path + ": " + std::strerror(errno));
         return false;
     }
     if (!CompressFile(rotated)) {
-        std::cerr << "Failed to compress log file " << rotated << "\n";
+        LogError("Failed to compress log file " + rotated);
     }
     CleanupOld("_" + log->name + ".gz");
     return true;

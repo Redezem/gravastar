@@ -40,6 +40,7 @@ add_library(gravastar_core
     src/blocklist.cpp
     src/cache.cpp
     src/config.cpp
+    src/controller_logger.cpp
     src/dns_packet.cpp
     src/dns_server.cpp
     src/local_records.cpp

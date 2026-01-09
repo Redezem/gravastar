@@ -64,6 +64,7 @@ Main config (`gravastar.toml`):
 - `cache_size_mb` (int): cache size in MB, default `100`
 - `cache_ttl_sec` (int): cache TTL in seconds, default `120`
 - `dot_verify` (bool): verify DoT TLS certificates, default `true`
+- `log_level` (string): controller log level (`debug`, `info`, `warn`, `error`)
 - `blocklist_file` (string): relative path to blocklist TOML
 - `local_records_file` (string): relative path to local records TOML
 - `upstreams_file` (string): relative path to upstreams TOML
@@ -122,6 +123,7 @@ Upstreams (`upstreams.toml`):
 - Sandbox environments may block sockets; integration tests may need
   elevated permissions.
 - Integration scripts ensure the server is ready by polling with `dig`.
+ - Controller log output goes to `/var/log/gravastar/controller.log`.
 
 ## Troubleshooting
 - If the server fails to start, check bind address/port and permissions.

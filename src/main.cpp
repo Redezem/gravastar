@@ -3,6 +3,7 @@
 #include "config.h"
 #include "dns_server.h"
 #include "local_records.h"
+#include "controller_logger.h"
 #include "query_logger.h"
 #include "upstream_blocklist.h"
 #include "upstream_resolver.h"
@@ -59,6 +60,14 @@ int main(int argc, char **argv) {
         }
     }
 
+    std::string log_dir = "/var/log/gravastar";
+    const char *env_log_dir = std::getenv("GRAVASTAR_LOG_DIR");
+    if (env_log_dir && env_log_dir[0] != '\0') {
+        log_dir = env_log_dir;
+    }
+    gravastar::ControllerLogger controller_logger(log_dir, 100 * 1024 * 1024);
+    gravastar::SetControllerLogger(&controller_logger);
+    gravastar::SetLogLevel(gravastar::LOG_DEBUG);
     gravastar::SetDebugEnabled(debug);
     if (debug) {
         gravastar::DebugLog("Debug logging enabled.");
@@ -69,13 +78,19 @@ int main(int argc, char **argv) {
     std::string err;
     std::string main_path = JoinPath(config_dir, "gravastar.toml");
     if (!gravastar::ConfigLoader::LoadMainConfig(main_path, &config, &err)) {
+        gravastar::LogError("Config error: " + err);
         std::cerr << "Config error: " << err << "\n";
         return 1;
+    }
+    gravastar::SetLogLevelFromString(config.log_level);
+    if (debug) {
+        gravastar::SetLogLevel(gravastar::LOG_DEBUG);
     }
 
     std::set<std::string> block_domains;
     std::string block_path = JoinPath(config_dir, config.blocklist_file);
     if (!gravastar::ConfigLoader::LoadBlocklist(block_path, &block_domains, &err)) {
+        gravastar::LogError("Blocklist error: " + err);
         std::cerr << "Blocklist error: " << err << "\n";
         return 1;
     }
@@ -83,6 +98,7 @@ int main(int argc, char **argv) {
     std::vector<gravastar::LocalRecord> local_records_vec;
     std::string local_path = JoinPath(config_dir, config.local_records_file);
     if (!gravastar::ConfigLoader::LoadLocalRecords(local_path, &local_records_vec, &err)) {
+        gravastar::LogError("Local records error: " + err);
         std::cerr << "Local records error: " << err << "\n";
         return 1;
     }
@@ -91,6 +107,7 @@ int main(int argc, char **argv) {
     std::vector<std::string> dot_servers;
     std::string upstream_path = JoinPath(config_dir, config.upstreams_file);
     if (!gravastar::ConfigLoader::LoadUpstreams(upstream_path, &udp_servers, &dot_servers, &err)) {
+        gravastar::LogError("Upstreams error: " + err);
         std::cerr << "Upstreams error: " << err << "\n";
         return 1;
     }
@@ -112,11 +129,6 @@ int main(int argc, char **argv) {
     resolver.SetDotServers(dot_servers);
     resolver.SetDotVerify(config.dot_verify);
 
-    std::string log_dir = "/var/log/gravastar";
-    const char *env_log_dir = std::getenv("GRAVASTAR_LOG_DIR");
-    if (env_log_dir && env_log_dir[0] != '\0') {
-        log_dir = env_log_dir;
-    }
     gravastar::QueryLogger logger(log_dir, 100 * 1024 * 1024);
     gravastar::DnsServer server(config, &blocklist, local_records, &cache,
                                 resolver, &logger);
@@ -129,6 +141,7 @@ int main(int argc, char **argv) {
     if (stat(upstream_blocklists_path.c_str(), &st) == 0) {
         upstream_mode = true;
     } else if (upstream_path_forced) {
+        gravastar::LogError("Upstream blocklist config not found: " + upstream_blocklists_path);
         std::cerr << "Upstream blocklist config not found: "
                   << upstream_blocklists_path << "\n";
         return 1;
@@ -140,6 +153,7 @@ int main(int argc, char **argv) {
         std::string err;
         if (!gravastar::LoadUpstreamBlocklistConfig(upstream_blocklists_path,
                                                     &upstream_config, &err)) {
+            gravastar::LogError("Upstream blocklist config error: " + err);
             std::cerr << "Upstream blocklist config error: " << err << "\n";
             return 1;
         }
@@ -149,6 +163,7 @@ int main(int argc, char **argv) {
         updater->Start();
     }
     if (!server.Run()) {
+        gravastar::LogError("Failed to start DNS server");
         std::cerr << "Failed to start DNS server\n";
         if (updater) {
             updater->Stop();

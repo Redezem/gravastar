@@ -5,6 +5,8 @@ bool TestConfig();
 bool TestDnsPacket();
 bool TestLoggingRotation();
 bool TestLoggingFailurePath();
+bool TestControllerLoggerRotation();
+bool TestControllerLogLevelFilter();
 bool TestParseHostPort();
 bool TestUpstreamBlocklistParse();
 bool TestUpstreamBlocklistCacheFallback();
@@ -29,6 +31,14 @@ int main() {
     }
     if (!TestLoggingFailurePath()) {
         std::cerr << "TestLoggingFailurePath failed\n";
+        failures++;
+    }
+    if (!TestControllerLoggerRotation()) {
+        std::cerr << "TestControllerLoggerRotation failed\n";
+        failures++;
+    }
+    if (!TestControllerLogLevelFilter()) {
+        std::cerr << "TestControllerLogLevelFilter failed\n";
         failures++;
     }
     if (!TestParseHostPort()) {

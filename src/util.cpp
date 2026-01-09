@@ -1,13 +1,19 @@
 #include "util.h"
 
+#include "controller_logger.h"
+
 #include <cctype>
 #include <iostream>
 
 namespace gravastar {
 
+void LogInternal(LogLevel level, const std::string &msg);
+
 namespace {
 
 bool g_debug_enabled = false;
+LogLevel g_log_level = LOG_DEBUG;
+ControllerLogger *g_controller_logger = NULL;
 
 } // namespace
 
@@ -60,17 +66,88 @@ bool StartsWith(const std::string &s, const std::string &prefix) {
 
 void SetDebugEnabled(bool enabled) {
     g_debug_enabled = enabled;
+    if (enabled) {
+        g_log_level = LOG_DEBUG;
+    }
 }
 
 bool DebugEnabled() {
-    return g_debug_enabled;
+    return g_log_level == LOG_DEBUG;
 }
 
 void DebugLog(const std::string &msg) {
-    if (!g_debug_enabled) {
+    if (g_log_level != LOG_DEBUG) {
         return;
     }
-    std::cerr << "[debug] " << msg << "\n";
+    LogInternal(LOG_DEBUG, std::string("[debug] ") + msg);
+}
+
+void SetLogLevel(LogLevel level) {
+    g_log_level = level;
+    g_debug_enabled = (level == LOG_DEBUG);
+}
+
+LogLevel GetLogLevel() {
+    return g_log_level;
+}
+
+bool SetLogLevelFromString(const std::string &level) {
+    std::string lowered = ToLower(level);
+    if (lowered == "debug") {
+        g_log_level = LOG_DEBUG;
+    } else if (lowered == "info") {
+        g_log_level = LOG_INFO;
+    } else if (lowered == "warn") {
+        g_log_level = LOG_WARN;
+    } else if (lowered == "error") {
+        g_log_level = LOG_ERROR;
+    } else {
+        return false;
+    }
+    g_debug_enabled = (g_log_level == LOG_DEBUG);
+    return true;
+}
+
+void SetControllerLogger(ControllerLogger *logger) {
+    g_controller_logger = logger;
+}
+
+static std::string EscapeLogMessage(const std::string &msg) {
+    std::string out;
+    out.reserve(msg.size());
+    for (size_t i = 0; i < msg.size(); ++i) {
+        char c = msg[i];
+        if (c == '\n' || c == '\r') {
+            out.push_back(' ');
+        } else {
+            out.push_back(c);
+        }
+    }
+    return out;
+}
+
+void LogInternal(LogLevel level, const std::string &msg) {
+    if (level < g_log_level) {
+        return;
+    }
+    std::string safe = EscapeLogMessage(msg);
+    if (g_controller_logger) {
+        g_controller_logger->Log(level, safe);
+        return;
+    }
+    std::cerr << safe << "\n";
+}
+
+void LogInfo(const std::string &msg) {
+    LogInternal(LOG_INFO, msg);
+}
+
+void LogWarn(const std::string &msg) {
+    LogInternal(LOG_WARN, msg);
+}
+
+void LogError(const std::string &msg) {
+    LogInternal(LOG_ERROR, msg);
 }
 
 } // namespace gravastar

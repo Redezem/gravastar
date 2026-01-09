@@ -3,6 +3,7 @@ listen_port = 53
 cache_size_mb = 100
 cache_ttl_sec = 120
 dot_verify = true
+log_level = "debug"
 blocklist_file = "blocklist.toml"
 local_records_file = "local_records.toml"
 upstreams_file = "upstreams.toml"

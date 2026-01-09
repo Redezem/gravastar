@@ -1,0 +1,247 @@
+#include "controller_logger.h"
+
+#include <cerrno>
+#include <cstring>
+#include <ctime>
+#include <dirent.h>
+#include <iostream>
+#include <sstream>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <vector>
+#include <algorithm>
+
+namespace gravastar {
+
+namespace {
+
+bool EndsWith(const std::string &value, const std::string &suffix) {
+    if (suffix.size() > value.size()) {
+        return false;
+    }
+    return value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+bool IsDir(const std::string &path) {
+    struct stat st;
+    if (stat(path.c_str(), &st) != 0) {
+        return false;
+    }
+    return S_ISDIR(st.st_mode);
+}
+
+} // namespace
+
+ControllerLogger::ControllerLogger(const std::string &dir, size_t max_bytes)
+    : dir_(dir),
+      max_bytes_(max_bytes),
+      enabled_(false),
+      log_() {
+    pthread_mutex_init(&mutex_, NULL);
+    log_.name = "controller.log";
+    log_.file = NULL;
+    log_.path = dir_ + "/" + log_.name;
+    enabled_ = EnsureDirectory();
+}
+
+ControllerLogger::~ControllerLogger() {
+    pthread_mutex_lock(&mutex_);
+    if (log_.file) {
+        fclose(log_.file);
+        log_.file = NULL;
+    }
+    pthread_mutex_unlock(&mutex_);
+    pthread_mutex_destroy(&mutex_);
+}
+
+bool ControllerLogger::EnsureDirectory() {
+    if (IsDir(dir_)) {
+        return true;
+    }
+    if (mkdir(dir_.c_str(), 0755) == 0) {
+        return true;
+    }
+    if (IsDir(dir_)) {
+        return true;
+    }
+    std::cerr << "Failed to create log dir " << dir_ << ": "
+              << std::strerror(errno) << "\n";
+    return false;
+}
+
+bool ControllerLogger::EnsureOpen() {
+    if (!enabled_) {
+        return false;
+    }
+    if (log_.file) {
+        return true;
+    }
+    log_.file = std::fopen(log_.path.c_str(), "a");
+    if (!log_.file) {
+        std::cerr << "Failed to open log file " << log_.path << ": "
+                  << std::strerror(errno) << "\n";
+        return false;
+    }
+    return true;
+}
+
+bool ControllerLogger::RotateIfNeeded() {
+    if (!enabled_) {
+        return false;
+    }
+    struct stat st;
+    if (stat(log_.path.c_str(), &st) != 0) {
+        return false;
+    }
+    if (static_cast<size_t>(st.st_size) < max_bytes_) {
+        return false;
+    }
+    if (log_.file) {
+        fclose(log_.file);
+        log_.file = NULL;
+    }
+    std::string rotated = UniqueRotatedName();
+    if (rename(log_.path.c_str(), rotated.c_str()) != 0) {
+        std::cerr << "Failed to rotate log file " << log_.path << ": "
+                  << std::strerror(errno) << "\n";
+        return false;
+    }
+    if (!CompressFile(rotated)) {
+        std::cerr << "Failed to compress log file " << rotated << "\n";
+    }
+    CleanupOld("_" + log_.name + ".gz");
+    return true;
+}
+
+bool ControllerLogger::WriteLine(const std::string &line) {
+    if (!EnsureOpen()) {
+        return false;
+    }
+    RotateIfNeeded();
+    if (!EnsureOpen()) {
+        return false;
+    }
+    if (std::fwrite(line.data(), 1, line.size(), log_.file) != line.size()) {
+        return false;
+    }
+    if (std::fwrite("\n", 1, 1, log_.file) != 1) {
+        return false;
+    }
+    std::fflush(log_.file);
+    return true;
+}
+
+std::string ControllerLogger::NowString() const {
+    char buf[32];
+    std::time_t now = std::time(NULL);
+    struct tm tm_buf;
+    struct tm *tm_ptr = localtime_r(&now, &tm_buf);
+    if (!tm_ptr) {
+        return "1970-01-01T00:00:00";
+    }
+    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", tm_ptr);
+    return std::string(buf);
+}
+
+std::string ControllerLogger::LevelString(LogLevel level) const {
+    if (level == LOG_DEBUG) {
+        return "DEBUG";
+    }
+    if (level == LOG_INFO) {
+        return "INFO";
+    }
+    if (level == LOG_WARN) {
+        return "WARN";
+    }
+    if (level == LOG_ERROR) {
+        return "ERROR";
+    }
+    return "INFO";
+}
+
+bool ControllerLogger::CompressFile(const std::string &path) {
+    pid_t pid = fork();
+    if (pid < 0) {
+        return false;
+    }
+    if (pid == 0) {
+        execlp("gzip", "gzip", "-f", path.c_str(), static_cast<char *>(NULL));
+        _exit(127);
+    }
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0) {
+        return false;
+    }
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+void ControllerLogger::CleanupOld(const std::string &suffix) {
+    DIR *dir = opendir(dir_.c_str());
+    if (!dir) {
+        return;
+    }
+    std::vector<std::pair<long long, std::string> > entries;
+    struct dirent *ent = NULL;
+    while ((ent = readdir(dir)) != NULL) {
+        std::string name = ent->d_name;
+        if (!EndsWith(name, suffix)) {
+            continue;
+        }
+        size_t underscore = name.find('_');
+        if (underscore == std::string::npos) {
+            continue;
+        }
+        long long ts = 0;
+        std::istringstream iss(name.substr(0, underscore));
+        iss >> ts;
+        if (ts <= 0) {
+            continue;
+        }
+        entries.push_back(std::make_pair(ts, name));
+    }
+    closedir(dir);
+    if (entries.size() <= 10) {
+        return;
+    }
+    std::sort(entries.begin(), entries.end());
+    size_t remove_count = entries.size() - 10;
+    for (size_t i = 0; i < remove_count; ++i) {
+        std::string path = dir_ + "/" + entries[i].second;
+        unlink(path.c_str());
+    }
+}
+
+std::string ControllerLogger::UniqueRotatedName() const {
+    std::time_t now = std::time(NULL);
+    std::ostringstream base;
+    base << dir_ << "/" << static_cast<long long>(now) << "_" << log_.name;
+    std::string candidate = base.str();
+    struct stat st;
+    if (stat(candidate.c_str(), &st) != 0) {
+        return candidate;
+    }
+    for (int i = 1; i < 1000; ++i) {
+        std::ostringstream alt;
+        alt << dir_ << "/" << static_cast<long long>(now) << "_" << i << "_" << log_.name;
+        candidate = alt.str();
+        if (stat(candidate.c_str(), &st) != 0) {
+            return candidate;
+        }
+    }
+    return candidate;
+}
+
+bool ControllerLogger::Log(LogLevel level, const std::string &msg) {
+    pthread_mutex_lock(&mutex_);
+    std::ostringstream out;
+    out << "ts=" << NowString()
+        << " level=" << LevelString(level)
+        << " msg=" << msg;
+    bool ok = WriteLine(out.str());
+    pthread_mutex_unlock(&mutex_);
+    return ok;
+}
+
+} // namespace gravastar

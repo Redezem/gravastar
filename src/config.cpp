@@ -19,6 +19,13 @@ bool ParseQuotedString(const std::string &raw, std::string *out) {
     return true;
 }
 
+bool IsValidLogLevel(const std::string &level) {
+    if (level == "debug" || level == "info" || level == "warn" || level == "error") {
+        return true;
+    }
+    return false;
+}
+
 bool ParseInteger(const std::string &raw, unsigned long *out) {
     std::string s = Trim(raw);
     if (s.empty()) {
@@ -111,6 +118,7 @@ bool ConfigLoader::LoadMainConfig(const std::string &path, ServerConfig *out, st
     out->cache_size_bytes = 100 * 1024 * 1024;
     out->cache_ttl_sec = 120;
     out->dot_verify = true;
+    out->log_level = "debug";
     out->blocklist_file = "blocklist.toml";
     out->local_records_file = "local_records.toml";
     out->upstreams_file = "upstreams.toml";
@@ -166,6 +174,18 @@ bool ConfigLoader::LoadMainConfig(const std::string &path, ServerConfig *out, st
                 return false;
             }
             out->dot_verify = v;
+        } else if (key == "log_level") {
+            std::string v;
+            if (!ParseQuotedString(value, &v)) {
+                if (err) *err = "invalid log_level";
+                return false;
+            }
+            v = ToLower(v);
+            if (!IsValidLogLevel(v)) {
+                if (err) *err = "invalid log_level";
+                return false;
+            }
+            out->log_level = v;
         } else if (key == "blocklist_file") {
             std::string v;
             if (!ParseQuotedString(value, &v)) {

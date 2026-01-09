@@ -13,6 +13,7 @@ struct ServerConfig {
     size_t cache_size_bytes;
     unsigned int cache_ttl_sec;
     bool dot_verify;
+    std::string log_level;
     std::string blocklist_file;
     std::string local_records_file;
     std::string upstreams_file;
