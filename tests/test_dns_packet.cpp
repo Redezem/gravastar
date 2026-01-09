@@ -42,6 +42,10 @@ std::vector<unsigned char> BuildQuery(const std::string &name, unsigned short qt
     return buf;
 }
 
+unsigned short ReadU16(const std::vector<unsigned char> &buf, size_t offset) {
+    return static_cast<unsigned short>((buf[offset] << 8) | buf[offset + 1]);
+}
+
 } // namespace
 
 bool TestDnsPacket() {
@@ -56,6 +60,10 @@ bool TestDnsPacket() {
     }
     std::vector<unsigned char> resp = gravastar::BuildAResponse(header, question, "1.2.3.4");
     if (resp.size() < query.size()) {
+        return false;
+    }
+    gravastar::PatchResponseId(&resp, 0xBEEF);
+    if (ReadU16(resp, 0) != 0xBEEF) {
         return false;
     }
     return true;

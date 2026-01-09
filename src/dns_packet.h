@@ -44,6 +44,7 @@ std::vector<unsigned char> BuildAAAAResponse(const DnsHeader &query_header,
 std::vector<unsigned char> BuildCNAMEResponse(const DnsHeader &query_header,
                                               const DnsQuestion &question,
                                               const std::string &target);
+void PatchResponseId(std::vector<unsigned char> *packet, uint16_t id);
 
 } // namespace gravastar
 

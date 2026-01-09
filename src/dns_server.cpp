@@ -193,6 +193,7 @@ bool DnsServer::HandleQuery(int sock, const std::vector<unsigned char> &packet,
   }
 
   std::vector<unsigned char> response;
+  bool cache_hit = false;
 
   if (blocklist_.IsBlocked(question.qname)) {
     DebugLog("Blocklist match");
@@ -226,6 +227,7 @@ bool DnsServer::HandleQuery(int sock, const std::vector<unsigned char> &packet,
         if (hit) {
           DebugLog("Cache hit");
           response = cached;
+          cache_hit = true;
         } else {
           DebugLog("Cache miss");
         }
@@ -247,6 +249,9 @@ bool DnsServer::HandleQuery(int sock, const std::vector<unsigned char> &packet,
   }
 
   if (!response.empty()) {
+    if (cache_hit) {
+      PatchResponseId(&response, header.id);
+    }
     sendto(sock, &response[0], response.size(), 0,
            reinterpret_cast<const struct sockaddr *>(&client_addr), client_len);
   }

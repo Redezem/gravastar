@@ -200,4 +200,12 @@ std::vector<unsigned char> BuildCNAMEResponse(const DnsHeader &query_header,
     return buf;
 }
 
+void PatchResponseId(std::vector<unsigned char> *packet, uint16_t id) {
+    if (!packet || packet->size() < 2) {
+        return;
+    }
+    (*packet)[0] = static_cast<unsigned char>((id >> 8) & 0xff);
+    (*packet)[1] = static_cast<unsigned char>(id & 0xff);
+}
+
 } // namespace gravastar
