@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
+#include <sstream>
 #include <netinet/in.h>
 #include <sys/select.h>
 #include <sys/socket.h>
@@ -34,6 +35,21 @@ std::string MakeCacheKey(const std::string &name, unsigned short qtype) {
   return key;
 }
 
+std::string QTypeToString(unsigned short qtype) {
+  if (qtype == DNS_TYPE_A) {
+    return "A";
+  }
+  if (qtype == DNS_TYPE_AAAA) {
+    return "AAAA";
+  }
+  if (qtype == DNS_TYPE_CNAME) {
+    return "CNAME";
+  }
+  std::ostringstream out;
+  out << "TYPE" << qtype;
+  return out.str();
+}
+
 } // namespace
 
 DnsServer::DnsServer(const ServerConfig &config, const Blocklist &blocklist,
@@ -57,12 +73,14 @@ DnsServer::~DnsServer() {
 bool DnsServer::Run() {
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
   if (sock < 0) {
+    DebugLog(std::string("socket() failed: ") + std::strerror(errno));
     return false;
   }
   int enable = 1;
   setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
   int flags = fcntl(sock, F_GETFL, 0);
   if (flags < 0 || fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0) {
+    DebugLog(std::string("fcntl(O_NONBLOCK) failed: ") + std::strerror(errno));
     close(sock);
     return false;
   }
@@ -72,12 +90,14 @@ bool DnsServer::Run() {
   addr.sin_family = AF_INET;
   addr.sin_port = htons(config_.listen_port);
   if (inet_pton(AF_INET, config_.listen_addr.c_str(), &addr.sin_addr) != 1) {
+    DebugLog(std::string("inet_pton failed for address: ") + config_.listen_addr);
     close(sock);
     return false;
   }
 
   if (bind(sock, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) <
       0) {
+    DebugLog(std::string("bind() failed: ") + std::strerror(errno));
     close(sock);
     return false;
   }
@@ -87,7 +107,17 @@ bool DnsServer::Run() {
 
   sock_ = sock;
   running_ = true;
+  {
+    std::ostringstream out;
+    out << "Listening on " << config_.listen_addr << ":" << config_.listen_port;
+    DebugLog(out.str());
+  }
   StartWorkers();
+  {
+    std::ostringstream out;
+    out << "Worker threads started: " << workers_.size();
+    DebugLog(out.str());
+  }
 
   while (g_running) {
     fd_set readfds;
@@ -97,7 +127,11 @@ bool DnsServer::Run() {
     tv.tv_sec = 1;
     tv.tv_usec = 0;
     int ready = select(sock + 1, &readfds, NULL, NULL, &tv);
-    if (ready <= 0) {
+    if (ready < 0) {
+      DebugLog(std::string("select() failed: ") + std::strerror(errno));
+      continue;
+    }
+    if (ready == 0) {
       continue;
     }
     if (!FD_ISSET(sock, &readfds)) {
@@ -114,10 +148,20 @@ bool DnsServer::Run() {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           break;
         }
+        DebugLog(std::string("recvfrom() failed: ") + std::strerror(errno));
         break;
       }
       if (received == 0) {
         continue;
+      }
+      if (DebugEnabled()) {
+        char addr_buf[INET_ADDRSTRLEN];
+        const char *addr_str = inet_ntop(AF_INET, &client_addr.sin_addr,
+                                         addr_buf, sizeof(addr_buf));
+        std::ostringstream out;
+        out << "Received " << received << " bytes from "
+            << (addr_str ? addr_str : "unknown") << ":" << ntohs(client_addr.sin_port);
+        DebugLog(out.str());
       }
       Job job;
       job.packet.assign(buf, buf + received);
@@ -139,12 +183,19 @@ bool DnsServer::HandleQuery(int sock, const std::vector<unsigned char> &packet,
   DnsHeader header;
   DnsQuestion question;
   if (!ParseDnsQuery(packet, &header, &question)) {
+    DebugLog("Failed to parse DNS query");
     return false;
+  }
+  if (DebugEnabled()) {
+    std::ostringstream out;
+    out << "Query: " << question.qname << " " << QTypeToString(question.qtype);
+    DebugLog(out.str());
   }
 
   std::vector<unsigned char> response;
 
   if (blocklist_.IsBlocked(question.qname)) {
+    DebugLog("Blocklist match");
     if (question.qtype == DNS_TYPE_A) {
       response = BuildAResponse(header, question, "0.0.0.0");
     } else if (question.qtype == DNS_TYPE_AAAA) {
@@ -157,6 +208,7 @@ bool DnsServer::HandleQuery(int sock, const std::vector<unsigned char> &packet,
     unsigned short local_type = 0;
     if (local_records_.Resolve(question.qname, question.qtype, &local_value,
                                &local_type)) {
+      DebugLog("Local record match");
       if (local_type == DNS_TYPE_A) {
         response = BuildAResponse(header, question, local_value);
       } else if (local_type == DNS_TYPE_AAAA) {
@@ -172,17 +224,22 @@ bool DnsServer::HandleQuery(int sock, const std::vector<unsigned char> &packet,
         bool hit = cache_->Get(key, &cached);
         pthread_mutex_unlock(&cache_mutex_);
         if (hit) {
+          DebugLog("Cache hit");
           response = cached;
+        } else {
+          DebugLog("Cache miss");
         }
       }
       if (response.empty()) {
         if (resolver_.ResolveUdp(packet, &response)) {
+          DebugLog("Upstream resolution success");
           if (cache_) {
             pthread_mutex_lock(&cache_mutex_);
             cache_->Put(key, response);
             pthread_mutex_unlock(&cache_mutex_);
           }
         } else {
+          DebugLog("Upstream resolution failed");
           response = BuildEmptyResponse(header, question);
         }
       }

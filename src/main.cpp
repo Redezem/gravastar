@@ -26,18 +26,21 @@ std::string JoinPath(const std::string &dir, const std::string &path) {
 }
 
 void PrintUsage(const char *argv0) {
-    std::cerr << "Usage: " << argv0 << " [-c config_dir]\n";
+    std::cerr << "Usage: " << argv0 << " [-c config_dir] [-d]\n";
 }
 
 } // namespace
 
 int main(int argc, char **argv) {
     std::string config_dir = "/etc/gravastar";
+    bool debug = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "-c" && i + 1 < argc) {
             config_dir = argv[++i];
+        } else if (arg == "-d" || arg == "--debug") {
+            debug = true;
         } else if (arg == "-h" || arg == "--help") {
             PrintUsage(argv[0]);
             return 0;
@@ -45,6 +48,12 @@ int main(int argc, char **argv) {
             PrintUsage(argv[0]);
             return 1;
         }
+    }
+
+    gravastar::SetDebugEnabled(debug);
+    if (debug) {
+        gravastar::DebugLog("Debug logging enabled.");
+        gravastar::DebugLog("Using config directory: " + config_dir);
     }
 
     gravastar::ServerConfig config;

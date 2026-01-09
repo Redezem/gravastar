@@ -1,8 +1,15 @@
 #include "util.h"
 
 #include <cctype>
+#include <iostream>
 
 namespace gravastar {
+
+namespace {
+
+bool g_debug_enabled = false;
+
+} // namespace
 
 std::string Trim(const std::string &s) {
     size_t start = 0;
@@ -49,6 +56,21 @@ bool StartsWith(const std::string &s, const std::string &prefix) {
         }
     }
     return true;
+}
+
+void SetDebugEnabled(bool enabled) {
+    g_debug_enabled = enabled;
+}
+
+bool DebugEnabled() {
+    return g_debug_enabled;
+}
+
+void DebugLog(const std::string &msg) {
+    if (!g_debug_enabled) {
+        return;
+    }
+    std::cerr << "[debug] " << msg << "\n";
 }
 
 } // namespace gravastar

@@ -1,9 +1,12 @@
 #include "upstream_resolver.h"
 
+#include "util.h"
+
 #include <arpa/inet.h>
 #include <cerrno>
 #include <cstring>
 #include <netinet/in.h>
+#include <sstream>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -21,10 +24,12 @@ void UpstreamResolver::SetDotServers(const std::vector<std::string> &servers) {
 bool UpstreamResolver::ResolveUdp(const std::vector<unsigned char> &query,
                                   std::vector<unsigned char> *response) {
     if (udp_servers_.empty()) {
+        DebugLog("No upstream UDP servers configured");
         return false;
     }
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
+        DebugLog(std::string("upstream socket() failed: ") + std::strerror(errno));
         return false;
     }
     struct sockaddr_in addr;
@@ -33,6 +38,7 @@ bool UpstreamResolver::ResolveUdp(const std::vector<unsigned char> &query,
     addr.sin_port = htons(53);
 
     if (inet_pton(AF_INET, udp_servers_[0].c_str(), &addr.sin_addr) != 1) {
+        DebugLog(std::string("upstream inet_pton failed for: ") + udp_servers_[0]);
         close(sock);
         return false;
     }
@@ -41,8 +47,14 @@ bool UpstreamResolver::ResolveUdp(const std::vector<unsigned char> &query,
                           reinterpret_cast<struct sockaddr *>(&addr),
                           sizeof(addr));
     if (sent < 0) {
+        DebugLog(std::string("upstream sendto failed: ") + std::strerror(errno));
         close(sock);
         return false;
+    }
+    if (DebugEnabled()) {
+        std::ostringstream out;
+        out << "Upstream query sent to " << udp_servers_[0] << ":53";
+        DebugLog(out.str());
     }
 
     fd_set readfds;
@@ -54,6 +66,7 @@ bool UpstreamResolver::ResolveUdp(const std::vector<unsigned char> &query,
 
     int ready = select(sock + 1, &readfds, NULL, NULL, &tv);
     if (ready <= 0) {
+        DebugLog("upstream select timed out or failed");
         close(sock);
         return false;
     }
@@ -62,7 +75,13 @@ bool UpstreamResolver::ResolveUdp(const std::vector<unsigned char> &query,
     ssize_t got = recvfrom(sock, buf, sizeof(buf), 0, NULL, NULL);
     close(sock);
     if (got <= 0) {
+        DebugLog("upstream recvfrom failed");
         return false;
+    }
+    if (DebugEnabled()) {
+        std::ostringstream out;
+        out << "Upstream response received: " << got << " bytes";
+        DebugLog(out.str());
     }
     response->assign(buf, buf + got);
     return true;
