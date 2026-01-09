@@ -36,3 +36,12 @@ enable_testing()
 add_test(NAME gravastar_tests COMMAND gravastar_tests)
 add_test(NAME gravastar_integration COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration_dig.sh $<TARGET_FILE:gravastar>)
 set_tests_properties(gravastar_integration PROPERTIES TIMEOUT 10)
+
+install(TARGETS gravastar RUNTIME DESTINATION /usr/local/bin)
+install(FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/gravastar.toml
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/blocklist.toml
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/local_records.toml
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/upstreams.toml
+    DESTINATION /etc/gravastar
+)
