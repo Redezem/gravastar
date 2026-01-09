@@ -3,6 +3,8 @@
 bool TestCache();
 bool TestConfig();
 bool TestDnsPacket();
+bool TestLoggingRotation();
+bool TestLoggingFailurePath();
 
 int main() {
     int failures = 0;
@@ -16,6 +18,14 @@ int main() {
     }
     if (!TestDnsPacket()) {
         std::cerr << "TestDnsPacket failed\n";
+        failures++;
+    }
+    if (!TestLoggingRotation()) {
+        std::cerr << "TestLoggingRotation failed\n";
+        failures++;
+    }
+    if (!TestLoggingFailurePath()) {
+        std::cerr << "TestLoggingFailurePath failed\n";
         failures++;
     }
     if (failures == 0) {

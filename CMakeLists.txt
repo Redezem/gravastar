@@ -14,6 +14,7 @@ add_library(gravastar_core
     src/dns_packet.cpp
     src/dns_server.cpp
     src/local_records.cpp
+    src/query_logger.cpp
     src/upstream_resolver.cpp
     src/util.cpp
 )
@@ -29,6 +30,7 @@ add_executable(gravastar_tests
     tests/test_cache.cpp
     tests/test_config.cpp
     tests/test_dns_packet.cpp
+    tests/test_logging.cpp
 )
 target_link_libraries(gravastar_tests gravastar_core)
 

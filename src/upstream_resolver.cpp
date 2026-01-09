@@ -22,10 +22,14 @@ void UpstreamResolver::SetDotServers(const std::vector<std::string> &servers) {
 }
 
 bool UpstreamResolver::ResolveUdp(const std::vector<unsigned char> &query,
-                                  std::vector<unsigned char> *response) {
+                                  std::vector<unsigned char> *response,
+                                  std::string *used_server) {
     if (udp_servers_.empty()) {
         DebugLog("No upstream UDP servers configured");
         return false;
+    }
+    if (used_server) {
+        *used_server = udp_servers_[0];
     }
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {

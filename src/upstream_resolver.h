@@ -12,7 +12,8 @@ public:
     void SetDotServers(const std::vector<std::string> &servers);
 
     bool ResolveUdp(const std::vector<unsigned char> &query,
-                    std::vector<unsigned char> *response);
+                    std::vector<unsigned char> *response,
+                    std::string *used_server);
 
 private:
     std::vector<std::string> udp_servers_;

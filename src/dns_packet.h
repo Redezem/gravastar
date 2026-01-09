@@ -11,6 +11,7 @@ namespace gravastar {
 enum {
     DNS_TYPE_A = 1,
     DNS_TYPE_CNAME = 5,
+    DNS_TYPE_PTR = 12,
     DNS_TYPE_AAAA = 28
 };
 
@@ -45,6 +46,8 @@ std::vector<unsigned char> BuildCNAMEResponse(const DnsHeader &query_header,
                                               const DnsQuestion &question,
                                               const std::string &target);
 void PatchResponseId(std::vector<unsigned char> *packet, uint16_t id);
+bool ExtractFirstPtrTarget(const std::vector<unsigned char> &packet,
+                           std::string *out_name);
 
 } // namespace gravastar
 

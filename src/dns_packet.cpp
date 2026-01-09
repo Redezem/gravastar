@@ -104,6 +104,65 @@ void AppendQuestion(std::vector<unsigned char> *buf, const DnsQuestion &question
     WriteU16(buf, question.qclass);
 }
 
+bool ReadName(const std::vector<unsigned char> &packet,
+              size_t offset,
+              std::string *out,
+              size_t *end_offset,
+              int depth) {
+    if (depth > 16) {
+        return false;
+    }
+    size_t pos = offset;
+    size_t jump_end = offset;
+    bool jumped = false;
+    std::string name;
+    while (pos < packet.size()) {
+        unsigned char len = packet[pos];
+        if (len == 0) {
+            pos += 1;
+            if (!jumped && end_offset) {
+                *end_offset = pos;
+            } else if (jumped && end_offset) {
+                *end_offset = jump_end;
+            }
+            if (out) {
+                *out = name;
+            }
+            return true;
+        }
+        if ((len & 0xC0) == 0xC0) {
+            if (pos + 1 >= packet.size()) {
+                return false;
+            }
+            uint16_t ptr = static_cast<uint16_t>((len & 0x3F) << 8) |
+                           static_cast<uint16_t>(packet[pos + 1]);
+            if (!jumped) {
+                jump_end = pos + 2;
+            }
+            pos = ptr;
+            jumped = true;
+            depth += 1;
+            if (depth > 16) {
+                return false;
+            }
+            continue;
+        }
+        if ((len & 0xC0) != 0) {
+            return false;
+        }
+        pos += 1;
+        if (pos + len > packet.size()) {
+            return false;
+        }
+        if (!name.empty()) {
+            name.append(".");
+        }
+        name.append(reinterpret_cast<const char *>(&packet[pos]), len);
+        pos += len;
+    }
+    return false;
+}
+
 } // namespace
 
 bool ParseDnsQuery(const std::vector<unsigned char> &packet, DnsHeader *header, DnsQuestion *question) {
@@ -206,6 +265,56 @@ void PatchResponseId(std::vector<unsigned char> *packet, uint16_t id) {
     }
     (*packet)[0] = static_cast<unsigned char>((id >> 8) & 0xff);
     (*packet)[1] = static_cast<unsigned char>(id & 0xff);
+}
+
+bool ExtractFirstPtrTarget(const std::vector<unsigned char> &packet,
+                           std::string *out_name) {
+    if (packet.size() < 12) {
+        return false;
+    }
+    uint16_t qdcount = ReadU16(packet, 4);
+    uint16_t ancount = ReadU16(packet, 6);
+    size_t offset = 12;
+    for (uint16_t i = 0; i < qdcount; ++i) {
+        std::string name;
+        size_t end = 0;
+        if (!ReadName(packet, offset, &name, &end, 0)) {
+            return false;
+        }
+        if (end + 4 > packet.size()) {
+            return false;
+        }
+        offset = end + 4;
+    }
+    for (uint16_t i = 0; i < ancount; ++i) {
+        std::string name;
+        size_t end = 0;
+        if (!ReadName(packet, offset, &name, &end, 0)) {
+            return false;
+        }
+        if (end + 10 > packet.size()) {
+            return false;
+        }
+        uint16_t type = ReadU16(packet, end);
+        uint16_t rdlength = ReadU16(packet, end + 8);
+        size_t rdata_offset = end + 10;
+        if (rdata_offset + rdlength > packet.size()) {
+            return false;
+        }
+        if (type == DNS_TYPE_PTR) {
+            std::string target;
+            size_t r_end = 0;
+            if (!ReadName(packet, rdata_offset, &target, &r_end, 0)) {
+                return false;
+            }
+            if (out_name) {
+                *out_name = target;
+            }
+            return true;
+        }
+        offset = rdata_offset + rdlength;
+    }
+    return false;
 }
 
 } // namespace gravastar

@@ -3,9 +3,11 @@
 #include "config.h"
 #include "dns_server.h"
 #include "local_records.h"
+#include "query_logger.h"
 #include "upstream_resolver.h"
 #include "util.h"
 
+#include <cstdlib>
 #include <iostream>
 #include <set>
 #include <vector>
@@ -102,7 +104,14 @@ int main(int argc, char **argv) {
     resolver.SetUdpServers(udp_servers);
     resolver.SetDotServers(dot_servers);
 
-    gravastar::DnsServer server(config, blocklist, local_records, &cache, resolver);
+    std::string log_dir = "/var/log/gravastar";
+    const char *env_log_dir = std::getenv("GRAVASTAR_LOG_DIR");
+    if (env_log_dir && env_log_dir[0] != '\0') {
+        log_dir = env_log_dir;
+    }
+    gravastar::QueryLogger logger(log_dir, 100 * 1024 * 1024);
+    gravastar::DnsServer server(config, blocklist, local_records, &cache,
+                                resolver, &logger);
     if (!server.Run()) {
         std::cerr << "Failed to start DNS server\n";
         return 1;

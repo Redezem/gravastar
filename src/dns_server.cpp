@@ -45,6 +45,9 @@ std::string QTypeToString(unsigned short qtype) {
   if (qtype == DNS_TYPE_CNAME) {
     return "CNAME";
   }
+  if (qtype == DNS_TYPE_PTR) {
+    return "PTR";
+  }
   std::ostringstream out;
   out << "TYPE" << qtype;
   return out.str();
@@ -54,10 +57,10 @@ std::string QTypeToString(unsigned short qtype) {
 
 DnsServer::DnsServer(const ServerConfig &config, const Blocklist &blocklist,
                      const LocalRecords &local_records, DnsCache *cache,
-                     const UpstreamResolver &resolver)
+                     const UpstreamResolver &resolver, QueryLogger *logger)
     : config_(config), blocklist_(blocklist), local_records_(local_records),
-      cache_(cache), resolver_(resolver), sock_(-1), running_(false),
-      worker_count_(4) {
+      cache_(cache), resolver_(resolver), logger_(logger), sock_(-1),
+      running_(false), worker_count_(4) {
   pthread_mutex_init(&queue_mutex_, NULL);
   pthread_cond_init(&queue_cv_, NULL);
   pthread_mutex_init(&cache_mutex_, NULL);
@@ -192,71 +195,181 @@ bool DnsServer::HandleQuery(int sock, const std::vector<unsigned char> &packet,
     DebugLog(out.str());
   }
 
-  std::vector<unsigned char> response;
-  bool cache_hit = false;
-
-  if (blocklist_.IsBlocked(question.qname)) {
-    DebugLog("Blocklist match");
-    if (question.qtype == DNS_TYPE_A) {
-      response = BuildAResponse(header, question, "0.0.0.0");
-    } else if (question.qtype == DNS_TYPE_AAAA) {
-      response = BuildAAAAResponse(header, question, "::1");
-    } else {
-      response = BuildEmptyResponse(header, question);
-    }
-  } else {
-    std::string local_value;
-    unsigned short local_type = 0;
-    if (local_records_.Resolve(question.qname, question.qtype, &local_value,
-                               &local_type)) {
-      DebugLog("Local record match");
-      if (local_type == DNS_TYPE_A) {
-        response = BuildAResponse(header, question, local_value);
-      } else if (local_type == DNS_TYPE_AAAA) {
-        response = BuildAAAAResponse(header, question, local_value);
-      } else if (local_type == DNS_TYPE_CNAME) {
-        response = BuildCNAMEResponse(header, question, local_value);
-      }
-    } else {
-      std::string key = MakeCacheKey(question.qname, question.qtype);
-      std::vector<unsigned char> cached;
-      if (cache_) {
-        pthread_mutex_lock(&cache_mutex_);
-        bool hit = cache_->Get(key, &cached);
-        pthread_mutex_unlock(&cache_mutex_);
-        if (hit) {
-          DebugLog("Cache hit");
-          response = cached;
-          cache_hit = true;
-        } else {
-          DebugLog("Cache miss");
-        }
-      }
-      if (response.empty()) {
-        if (resolver_.ResolveUdp(packet, &response)) {
-          DebugLog("Upstream resolution success");
-          if (cache_) {
-            pthread_mutex_lock(&cache_mutex_);
-            cache_->Put(key, response);
-            pthread_mutex_unlock(&cache_mutex_);
-          }
-        } else {
-          DebugLog("Upstream resolution failed");
-          response = BuildEmptyResponse(header, question);
-        }
-      }
-    }
+  ResolveResult result;
+  if (!ResolveQuery(packet, header, question, &result)) {
+    return false;
   }
 
-  if (!response.empty()) {
-    if (cache_hit) {
-      PatchResponseId(&response, header.id);
+  if (!result.response.empty()) {
+    if (result.source == RESOLVE_CACHE) {
+      PatchResponseId(&result.response, header.id);
     }
-    sendto(sock, &response[0], response.size(), 0,
+    sendto(sock, &result.response[0], result.response.size(), 0,
            reinterpret_cast<const struct sockaddr *>(&client_addr), client_len);
   }
 
+  if (logger_) {
+    char addr_buf[INET_ADDRSTRLEN];
+    const char *addr_str = inet_ntop(AF_INET, &client_addr.sin_addr, addr_buf,
+                                     sizeof(addr_buf));
+    std::string client_ip = addr_str ? addr_str : "unknown";
+    std::string client_name = ResolveClientName(client_addr);
+    std::string qtype = QTypeToString(question.qtype);
+    if (result.source == RESOLVE_BLOCKLIST) {
+      logger_->LogBlock(client_ip, client_name, question.qname, qtype);
+    } else {
+      std::string resolved_by;
+      if (result.source == RESOLVE_LOCAL) {
+        resolved_by = "local";
+      } else if (result.source == RESOLVE_CACHE) {
+        resolved_by = "cache";
+      } else {
+        resolved_by = "external";
+      }
+      logger_->LogPass(client_ip, client_name, question.qname, qtype,
+                       resolved_by, result.upstream);
+    }
+  }
+
   return true;
+}
+
+bool DnsServer::ResolveQuery(const std::vector<unsigned char> &packet,
+                             const DnsHeader &header,
+                             const DnsQuestion &question,
+                             ResolveResult *result) {
+  if (!result) {
+    return false;
+  }
+  result->response.clear();
+  result->upstream.clear();
+  result->source = RESOLVE_NONE;
+
+  if (blocklist_.IsBlocked(question.qname)) {
+    DebugLog("Blocklist match");
+    result->source = RESOLVE_BLOCKLIST;
+    if (question.qtype == DNS_TYPE_A) {
+      result->response = BuildAResponse(header, question, "0.0.0.0");
+    } else if (question.qtype == DNS_TYPE_AAAA) {
+      result->response = BuildAAAAResponse(header, question, "::1");
+    } else {
+      result->response = BuildEmptyResponse(header, question);
+    }
+    return true;
+  }
+
+  std::string local_value;
+  unsigned short local_type = 0;
+  if (local_records_.Resolve(question.qname, question.qtype, &local_value,
+                             &local_type)) {
+    DebugLog("Local record match");
+    result->source = RESOLVE_LOCAL;
+    if (local_type == DNS_TYPE_A) {
+      result->response = BuildAResponse(header, question, local_value);
+    } else if (local_type == DNS_TYPE_AAAA) {
+      result->response = BuildAAAAResponse(header, question, local_value);
+    } else if (local_type == DNS_TYPE_CNAME) {
+      result->response = BuildCNAMEResponse(header, question, local_value);
+    }
+    return true;
+  }
+
+  std::string key = MakeCacheKey(question.qname, question.qtype);
+  std::vector<unsigned char> cached;
+  if (cache_) {
+    pthread_mutex_lock(&cache_mutex_);
+    bool hit = cache_->Get(key, &cached);
+    pthread_mutex_unlock(&cache_mutex_);
+    if (hit) {
+      DebugLog("Cache hit");
+      result->source = RESOLVE_CACHE;
+      result->response = cached;
+      return true;
+    }
+    DebugLog("Cache miss");
+  }
+
+  result->source = RESOLVE_UPSTREAM;
+  if (resolver_.ResolveUdp(packet, &result->response, &result->upstream)) {
+    DebugLog("Upstream resolution success");
+    if (cache_) {
+      pthread_mutex_lock(&cache_mutex_);
+      cache_->Put(key, result->response);
+      pthread_mutex_unlock(&cache_mutex_);
+    }
+  } else {
+    DebugLog("Upstream resolution failed");
+    result->response = BuildEmptyResponse(header, question);
+  }
+  return true;
+}
+
+std::string DnsServer::ResolveClientName(const struct sockaddr_in &client_addr) {
+  char addr_buf[INET_ADDRSTRLEN];
+  const char *addr_str = inet_ntop(AF_INET, &client_addr.sin_addr, addr_buf,
+                                   sizeof(addr_buf));
+  if (!addr_str) {
+    return "-";
+  }
+  std::vector<std::string> parts = Split(addr_str, '.');
+  if (parts.size() != 4) {
+    return "-";
+  }
+  std::ostringstream qname;
+  qname << parts[3] << "." << parts[2] << "." << parts[1] << "." << parts[0]
+        << ".in-addr.arpa";
+  std::vector<unsigned char> query;
+  query.reserve(64);
+  unsigned short id = 0x4242;
+  query.push_back(static_cast<unsigned char>((id >> 8) & 0xff));
+  query.push_back(static_cast<unsigned char>(id & 0xff));
+  query.push_back(0x01);
+  query.push_back(0x00);
+  query.push_back(0x00);
+  query.push_back(0x01);
+  query.push_back(0x00);
+  query.push_back(0x00);
+  query.push_back(0x00);
+  query.push_back(0x00);
+  query.push_back(0x00);
+  query.push_back(0x00);
+  std::string name = qname.str();
+  size_t start = 0;
+  while (start < name.size()) {
+    size_t dot = name.find('.', start);
+    if (dot == std::string::npos) {
+      dot = name.size();
+    }
+    size_t len = dot - start;
+    query.push_back(static_cast<unsigned char>(len));
+    for (size_t i = 0; i < len; ++i) {
+      query.push_back(static_cast<unsigned char>(name[start + i]));
+    }
+    start = dot + 1;
+  }
+  query.push_back(0);
+  query.push_back(0x00);
+  query.push_back(static_cast<unsigned char>(DNS_TYPE_PTR));
+  query.push_back(0x00);
+  query.push_back(0x01);
+
+  DnsHeader header;
+  DnsQuestion question;
+  if (!ParseDnsQuery(query, &header, &question)) {
+    return "-";
+  }
+  ResolveResult result;
+  if (!ResolveQuery(query, header, question, &result)) {
+    return "-";
+  }
+  std::string ptr_name;
+  if (!ExtractFirstPtrTarget(result.response, &ptr_name)) {
+    return "-";
+  }
+  if (ptr_name.empty()) {
+    return "-";
+  }
+  return ptr_name;
 }
 
 void DnsServer::StartWorkers() {
