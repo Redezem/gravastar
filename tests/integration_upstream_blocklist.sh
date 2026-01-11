@@ -37,7 +37,9 @@ upstreams_file = "upstreams.toml"
 CONF
 
 cat > "$WORKDIR/blocklist.toml" <<'CONF'
-domains = []
+domains = [
+  "custom.example.org"
+]
 CONF
 
 cat > "$WORKDIR/local_records.toml" <<'CONF'
@@ -69,8 +71,9 @@ PID=$!
 READY=0
 ATTEMPTS=10
 while [ "$ATTEMPTS" -gt 0 ]; do
-  OUT="$(dig @127.0.0.1 -p "$PORT" ads.example.com A +time=1 +tries=1 +short | awk 'NR==1{print; exit}')"
-  if [ "$OUT" = "0.0.0.0" ]; then
+  OUT1="$(dig @127.0.0.1 -p "$PORT" ads.example.com A +time=1 +tries=1 +short | awk 'NR==1{print; exit}')"
+  OUT2="$(dig @127.0.0.1 -p "$PORT" custom.example.org A +time=1 +tries=1 +short | awk 'NR==1{print; exit}')"
+  if [ "$OUT1" = "0.0.0.0" ] && [ "$OUT2" = "0.0.0.0" ]; then
     READY=1
     break
   fi

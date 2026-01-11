@@ -38,6 +38,7 @@ std::string CachePathForUrl(const std::string &cache_dir,
 class UpstreamBlocklistUpdater {
 public:
     UpstreamBlocklistUpdater(const UpstreamBlocklistConfig &config,
+                             const std::string &custom_blocklist_path,
                              const std::string &output_path,
                              Blocklist *blocklist);
     ~UpstreamBlocklistUpdater();
@@ -52,6 +53,7 @@ private:
     bool EnsureCacheDir();
 
     UpstreamBlocklistConfig config_;
+    std::string custom_blocklist_path_;
     std::string output_path_;
     Blocklist *blocklist_;
     pthread_t thread_;

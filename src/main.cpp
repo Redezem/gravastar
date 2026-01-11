@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <cstdlib>
 #include <iostream>
+#include <sstream>
 #include <set>
 #include <vector>
 
@@ -87,16 +88,39 @@ int main(int argc, char **argv) {
         gravastar::SetLogLevel(gravastar::LOG_DEBUG);
     }
 
+    bool upstream_mode = false;
+    if (upstream_blocklists_path.empty()) {
+        upstream_blocklists_path = JoinPath(config_dir, "upstream_blocklists.toml");
+    }
+    struct stat st;
+    if (stat(upstream_blocklists_path.c_str(), &st) == 0) {
+        upstream_mode = true;
+    } else if (upstream_path_forced) {
+        gravastar::LogError("Upstream blocklist config not found: " + upstream_blocklists_path);
+        std::cerr << "Upstream blocklist config not found: "
+                  << upstream_blocklists_path << "\n";
+        return 1;
+    }
+
+    gravastar::Blocklist blocklist;
     std::set<std::string> block_domains;
     std::string block_path = JoinPath(config_dir, config.blocklist_file);
+    gravastar::LogInfo("Loading blocklist: " + block_path);
     if (!gravastar::ConfigLoader::LoadBlocklist(block_path, &block_domains, &err)) {
         gravastar::LogError("Blocklist error: " + err);
         std::cerr << "Blocklist error: " << err << "\n";
         return 1;
     }
+    {
+        std::ostringstream out;
+        out << "Blocklist loaded: " << block_domains.size() << " domains";
+        gravastar::LogInfo(out.str());
+    }
+    blocklist.SetDomains(block_domains);
 
     std::vector<gravastar::LocalRecord> local_records_vec;
     std::string local_path = JoinPath(config_dir, config.local_records_file);
+    gravastar::LogInfo("Loading local records: " + local_path);
     if (!gravastar::ConfigLoader::LoadLocalRecords(local_path, &local_records_vec, &err)) {
         gravastar::LogError("Local records error: " + err);
         std::cerr << "Local records error: " << err << "\n";
@@ -106,6 +130,7 @@ int main(int argc, char **argv) {
     std::vector<std::string> udp_servers;
     std::vector<std::string> dot_servers;
     std::string upstream_path = JoinPath(config_dir, config.upstreams_file);
+    gravastar::LogInfo("Loading upstreams: " + upstream_path);
     if (!gravastar::ConfigLoader::LoadUpstreams(upstream_path, &udp_servers, &dot_servers, &err)) {
         gravastar::LogError("Upstreams error: " + err);
         std::cerr << "Upstreams error: " << err << "\n";
@@ -115,9 +140,6 @@ int main(int argc, char **argv) {
     if (!dot_servers.empty()) {
         gravastar::DebugLog("DoT servers configured.");
     }
-
-    gravastar::Blocklist blocklist;
-    blocklist.SetDomains(block_domains);
 
     gravastar::LocalRecords local_records;
     local_records.Load(local_records_vec);
@@ -133,20 +155,6 @@ int main(int argc, char **argv) {
     gravastar::DnsServer server(config, &blocklist, local_records, &cache,
                                 resolver, &logger);
 
-    bool upstream_mode = false;
-    if (upstream_blocklists_path.empty()) {
-        upstream_blocklists_path = JoinPath(config_dir, "upstream_blocklists.toml");
-    }
-    struct stat st;
-    if (stat(upstream_blocklists_path.c_str(), &st) == 0) {
-        upstream_mode = true;
-    } else if (upstream_path_forced) {
-        gravastar::LogError("Upstream blocklist config not found: " + upstream_blocklists_path);
-        std::cerr << "Upstream blocklist config not found: "
-                  << upstream_blocklists_path << "\n";
-        return 1;
-    }
-
     gravastar::UpstreamBlocklistUpdater *updater = NULL;
     gravastar::UpstreamBlocklistConfig upstream_config;
     if (upstream_mode) {
@@ -157,8 +165,9 @@ int main(int argc, char **argv) {
             std::cerr << "Upstream blocklist config error: " << err << "\n";
             return 1;
         }
+        std::string generated_path = JoinPath(upstream_config.cache_dir, "blocklist.generated.toml");
         updater = new gravastar::UpstreamBlocklistUpdater(
-            upstream_config, block_path, &blocklist);
+            upstream_config, block_path, generated_path, &blocklist);
         updater->Start();
     }
     if (!server.Run()) {

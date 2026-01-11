@@ -76,6 +76,31 @@ bool ParseStringArray(const std::string &raw, std::vector<std::string> *out) {
     return true;
 }
 
+bool ExtractQuotedStrings(const std::string &raw, std::vector<std::string> *out) {
+    if (!out) {
+        return false;
+    }
+    bool in_quote = false;
+    std::string current;
+    for (size_t i = 0; i < raw.size(); ++i) {
+        char c = raw[i];
+        if (c == '"') {
+            if (in_quote) {
+                out->push_back(current);
+                current.clear();
+                in_quote = false;
+            } else {
+                in_quote = true;
+            }
+            continue;
+        }
+        if (in_quote) {
+            current.push_back(c);
+        }
+    }
+    return true;
+}
+
 bool ReadLines(const std::string &path, std::vector<std::string> *lines, std::string *err) {
     std::ifstream in(path.c_str());
     if (!in.is_open()) {
@@ -216,37 +241,48 @@ bool ConfigLoader::LoadBlocklist(const std::string &path, std::set<std::string> 
     if (!out) {
         return false;
     }
-    std::vector<std::string> lines;
-    if (!ReadLines(path, &lines, err)) {
+    std::ifstream in(path.c_str());
+    if (!in.is_open()) {
+        if (err) {
+            *err = "unable to open file: " + path;
+        }
         return false;
     }
-    for (size_t i = 0; i < lines.size(); ++i) {
-        std::string line = Trim(StripComment(lines[i]));
-        if (line.empty()) {
+    std::string line;
+    bool in_domains = false;
+    while (std::getline(in, line)) {
+        std::string trimmed = Trim(StripComment(line));
+        if (trimmed.empty()) {
             continue;
         }
-        size_t eq = line.find('=');
-        if (eq == std::string::npos) {
-            continue;
-        }
-        std::string key = Trim(line.substr(0, eq));
-        std::string value = Trim(line.substr(eq + 1));
-        if (key == "domains") {
-            while (value.find(']') == std::string::npos && i + 1 < lines.size()) {
-                ++i;
-                std::string next = Trim(StripComment(lines[i]));
-                if (!next.empty()) {
-                    value.append(next);
-                }
+        if (!in_domains) {
+            size_t eq = trimmed.find('=');
+            if (eq == std::string::npos) {
+                continue;
             }
+            std::string key = Trim(trimmed.substr(0, eq));
+            if (key != "domains") {
+                continue;
+            }
+            in_domains = true;
+            std::string value = Trim(trimmed.substr(eq + 1));
             std::vector<std::string> items;
-            if (!ParseStringArray(value, &items)) {
-                if (err) *err = "invalid blocklist domains";
-                return false;
-            }
+            ExtractQuotedStrings(value, &items);
             for (size_t j = 0; j < items.size(); ++j) {
                 out->insert(CanonicalName(items[j]));
             }
+            if (value.find(']') != std::string::npos) {
+                in_domains = false;
+            }
+            continue;
+        }
+        std::vector<std::string> items;
+        ExtractQuotedStrings(trimmed, &items);
+        for (size_t j = 0; j < items.size(); ++j) {
+            out->insert(CanonicalName(items[j]));
+        }
+        if (trimmed.find(']') != std::string::npos) {
+            in_domains = false;
         }
     }
     return true;

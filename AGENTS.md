@@ -77,7 +77,7 @@ Upstream blocklists (`upstream_blocklists.toml`):
 - `urls` (array of strings): upstream list URLs
 
 Blocklist (`blocklist.toml`):
-- `domains` (array of strings): domains to blackhole; matching is suffix-based
+- `domains` (array of strings): custom domains to blackhole; merged with upstream
 
 Local records (`local_records.toml`):
 - `[[record]]` tables with:
@@ -98,7 +98,8 @@ Upstreams (`upstreams.toml`):
 4. Cache: lookup full response packet by key `qname|qtype`.
 5. Upstream: forward full query over DoT to the first DoT server (if configured),
    else UDP to the first upstream server, cache response, and return.
-6. Optional upstream blocklist updater writes `blocklist.toml` and reloads it.
+6. Upstream blocklist updater merges upstream domains with custom `blocklist.toml`
+   and writes `/var/gravastar/blocklist.generated.toml`.
 
 ## Concurrency and Synchronization
 - Main thread: `select` + `recvfrom` on a nonblocking UDP socket.
@@ -150,7 +151,7 @@ Upstreams (`upstreams.toml`):
 - No hot reload of configs.
  - No IPv6 listener support (server binds IPv4 only).
  - Logging is file-based; no structured log levels beyond query logs.
- - Upstream blocklist updater does not merge with local blocklist overrides.
+ - Upstream blocklist updater does not support per-list overrides beyond merging.
 
 ## Suggested Next Steps
 1. Improve DNS protocol coverage (compression, multi-question handling, error

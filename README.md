@@ -73,7 +73,9 @@ log type. For development/testing, set `GRAVASTAR_LOG_DIR` to redirect logs.
 To ingest Pi-hole style upstream blocklists, create
 `/etc/gravastar/upstream_blocklists.toml` (or pass `-u` with a custom path).
 The updater runs at launch and then periodically (default hourly), caching
-upstream files in `/var/gravastar` and rewriting `blocklist.toml`.
+upstream files in `/var/gravastar`. The entries in `blocklist.toml` are treated
+as a custom list and are merged with upstream domains. A generated combined
+blocklist is written to `/var/gravastar/blocklist.generated.toml`.
 
 Example:
 

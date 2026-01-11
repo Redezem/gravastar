@@ -1,6 +1,7 @@
 #include "upstream_blocklist.h"
 
 #include "util.h"
+#include "config.h"
 
 #include <cctype>
 #include <cerrno>
@@ -473,9 +474,11 @@ std::string CachePathForUrl(const std::string &cache_dir,
 
 UpstreamBlocklistUpdater::UpstreamBlocklistUpdater(
     const UpstreamBlocklistConfig &config,
+    const std::string &custom_blocklist_path,
     const std::string &output_path,
     Blocklist *blocklist)
     : config_(config),
+      custom_blocklist_path_(custom_blocklist_path),
       output_path_(output_path),
       blocklist_(blocklist),
       thread_(),
@@ -506,6 +509,14 @@ bool UpstreamBlocklistUpdater::UpdateOnce() {
         LogError("Upstream blocklist update failed: " + err);
         return false;
     }
+    std::set<std::string> custom_domains;
+    if (!custom_blocklist_path_.empty()) {
+        if (!ConfigLoader::LoadBlocklist(custom_blocklist_path_, &custom_domains, &err)) {
+            LogError("Custom blocklist load failed: " + err);
+            return false;
+        }
+    }
+    domains.insert(custom_domains.begin(), custom_domains.end());
     if (!WriteBlocklistToml(output_path_, domains, &err)) {
         DebugLog("Failed to write blocklist.toml: " + err);
         LogError("Failed to write blocklist.toml: " + err);
