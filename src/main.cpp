@@ -159,7 +159,6 @@ int main(int argc, char **argv) {
         }
         updater = new gravastar::UpstreamBlocklistUpdater(
             upstream_config, block_path, &blocklist);
-        updater->UpdateOnce();
         updater->Start();
     }
     if (!server.Run()) {

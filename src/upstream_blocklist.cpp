@@ -559,6 +559,8 @@ void *UpstreamBlocklistUpdater::ThreadEntry(void *arg) {
 }
 
 void UpstreamBlocklistUpdater::ThreadLoop() {
+    LogInfo("Upstream blocklist initial update");
+    UpdateOnce();
     pthread_mutex_lock(&mutex_);
     while (running_) {
         struct timespec ts;

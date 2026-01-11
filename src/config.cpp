@@ -291,7 +291,11 @@ bool ConfigLoader::LoadLocalRecords(const std::string &path, std::vector<LocalRe
         if (in_record) {
             std::string v;
             if (!ParseQuotedString(value, &v)) {
-                if (err) *err = "invalid local record value";
+                if (err) {
+                    std::ostringstream msg;
+                    msg << "invalid local record value at line " << (i + 1);
+                    *err = msg.str();
+                }
                 return false;
             }
             if (key == "name") {
