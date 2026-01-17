@@ -575,7 +575,7 @@ void UpstreamBlocklistUpdater::ThreadLoop() {
     pthread_mutex_lock(&mutex_);
     while (running_) {
         struct timespec ts;
-        std::time_t now = std::time(NULL);
+        time_t now = time(NULL);
         ts.tv_sec = now + config_.update_interval_sec;
         ts.tv_nsec = 0;
         pthread_cond_timedwait(&cv_, &mutex_, &ts);

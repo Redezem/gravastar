@@ -259,6 +259,71 @@ std::vector<unsigned char> BuildCNAMEResponse(const DnsHeader &query_header,
     return buf;
 }
 
+std::vector<unsigned char> BuildPTRResponse(const DnsHeader &query_header,
+                                             const DnsQuestion &question,
+                                             const std::string &target) {
+    std::vector<unsigned char> buf = BuildResponseHeader(query_header, 1, 1);
+    AppendQuestion(&buf, question);
+    WriteQName(&buf, question.qname);
+    WriteU16(&buf, DNS_TYPE_PTR);
+    WriteU16(&buf, 1);
+    WriteU32(&buf, 60);
+    std::vector<unsigned char> ptr;
+    WriteQName(&ptr, target);
+    WriteU16(&buf, static_cast<uint16_t>(ptr.size()));
+    buf.insert(buf.end(), ptr.begin(), ptr.end());
+    return buf;
+}
+
+std::vector<unsigned char> BuildTXTResponse(const DnsHeader &query_header,
+                                             const DnsQuestion &question,
+                                             const std::string &text) {
+    std::vector<unsigned char> buf = BuildResponseHeader(query_header, 1, 1);
+    AppendQuestion(&buf, question);
+    WriteQName(&buf, question.qname);
+    WriteU16(&buf, DNS_TYPE_TXT);
+    WriteU16(&buf, 1);
+    WriteU32(&buf, 60);
+    std::vector<unsigned char> rdata;
+    if (text.empty()) {
+        rdata.push_back(0);
+    } else {
+        size_t offset = 0;
+        while (offset < text.size()) {
+            size_t chunk = text.size() - offset;
+            if (chunk > 255) {
+                chunk = 255;
+            }
+            rdata.push_back(static_cast<unsigned char>(chunk));
+            for (size_t i = 0; i < chunk; ++i) {
+                rdata.push_back(static_cast<unsigned char>(text[offset + i]));
+            }
+            offset += chunk;
+        }
+    }
+    WriteU16(&buf, static_cast<uint16_t>(rdata.size()));
+    buf.insert(buf.end(), rdata.begin(), rdata.end());
+    return buf;
+}
+
+std::vector<unsigned char> BuildMXResponse(const DnsHeader &query_header,
+                                            const DnsQuestion &question,
+                                            unsigned short preference,
+                                            const std::string &exchange) {
+    std::vector<unsigned char> buf = BuildResponseHeader(query_header, 1, 1);
+    AppendQuestion(&buf, question);
+    WriteQName(&buf, question.qname);
+    WriteU16(&buf, DNS_TYPE_MX);
+    WriteU16(&buf, 1);
+    WriteU32(&buf, 60);
+    std::vector<unsigned char> rdata;
+    WriteU16(&rdata, preference);
+    WriteQName(&rdata, exchange);
+    WriteU16(&buf, static_cast<uint16_t>(rdata.size()));
+    buf.insert(buf.end(), rdata.begin(), rdata.end());
+    return buf;
+}
+
 void PatchResponseId(std::vector<unsigned char> *packet, uint16_t id) {
     if (!packet || packet->size() < 2) {
         return;

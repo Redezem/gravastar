@@ -48,9 +48,37 @@ std::string QTypeToString(unsigned short qtype) {
   if (qtype == DNS_TYPE_PTR) {
     return "PTR";
   }
+  if (qtype == DNS_TYPE_MX) {
+    return "MX";
+  }
+  if (qtype == DNS_TYPE_TXT) {
+    return "TXT";
+  }
   std::ostringstream out;
   out << "TYPE" << qtype;
   return out.str();
+}
+
+void ParseMxValue(const std::string &value,
+                  unsigned short *preference,
+                  std::string *exchange) {
+  unsigned short pref = 10;
+  std::string target = Trim(value);
+  std::istringstream iss(value);
+  unsigned long parsed_pref = 0;
+  std::string parsed_target;
+  if ((iss >> parsed_pref) && (iss >> parsed_target)) {
+    if (parsed_pref <= 65535) {
+      pref = static_cast<unsigned short>(parsed_pref);
+    }
+    target = parsed_target;
+  }
+  if (preference) {
+    *preference = pref;
+  }
+  if (exchange) {
+    *exchange = target;
+  }
 }
 
 } // namespace
@@ -270,6 +298,15 @@ bool DnsServer::ResolveQuery(const std::vector<unsigned char> &packet,
       result->response = BuildAAAAResponse(header, question, local_value);
     } else if (local_type == DNS_TYPE_CNAME) {
       result->response = BuildCNAMEResponse(header, question, local_value);
+    } else if (local_type == DNS_TYPE_PTR) {
+      result->response = BuildPTRResponse(header, question, local_value);
+    } else if (local_type == DNS_TYPE_TXT) {
+      result->response = BuildTXTResponse(header, question, local_value);
+    } else if (local_type == DNS_TYPE_MX) {
+      unsigned short pref = 10;
+      std::string exchange;
+      ParseMxValue(local_value, &pref, &exchange);
+      result->response = BuildMXResponse(header, question, pref, exchange);
     }
     return true;
   }

@@ -53,7 +53,15 @@ dot_servers = ["cloudflare-dns.com@1.1.1.1"]
 CONF
 
 mkdir -p "$LOGDIR"
-GRAVASTAR_LOG_DIR="$LOGDIR" "$GRAVASTAR_BIN" -d -c "$WORKDIR" >"$WORKDIR/server.out" 2>&1 &
+PRELOAD=""
+if [ -f "/usr/lib/libressl/libssl.so.60" ] && [ -f "/usr/lib/libressl/libcrypto.so.57" ]; then
+  PRELOAD="/usr/lib/libressl/libssl.so.60:/usr/lib/libressl/libcrypto.so.57"
+fi
+if [ -n "$PRELOAD" ]; then
+  LD_PRELOAD="$PRELOAD" GRAVASTAR_LOG_DIR="$LOGDIR" "$GRAVASTAR_BIN" -d -c "$WORKDIR" >"$WORKDIR/server.out" 2>&1 &
+else
+  GRAVASTAR_LOG_DIR="$LOGDIR" "$GRAVASTAR_BIN" -d -c "$WORKDIR" >"$WORKDIR/server.out" 2>&1 &
+fi
 PID=$!
 
 READY=0

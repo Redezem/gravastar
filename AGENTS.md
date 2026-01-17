@@ -16,7 +16,7 @@ This codebase aims to stay portable across POSIX platforms (Linux/BSD/macOS).
 - Cache access is protected by a mutex for thread safety.
 - Unit tests and `dig`-based integration tests (UDP + DoT) exist.
 - DNS parser is minimal: single-question queries, no compression handling,
-  basic response building for A/AAAA/CNAME only, PTR parsing for logging.
+  basic response building for A/AAAA/CNAME/MX/TXT/PTR only, PTR parsing for logging.
 
 ## Repository Layout
 - `src/`: core implementation
@@ -82,7 +82,7 @@ Blocklist (`blocklist.toml`):
 Local records (`local_records.toml`):
 - `[[record]]` tables with:
   - `name` (string): hostname
-  - `type` (string): `A`, `AAAA`, or `CNAME`
+  - `type` (string): `A`, `AAAA`, `CNAME`, `MX`, `TXT`, or `PTR`
   - `value` (string): IP or hostname
 
 Upstreams (`upstreams.toml`):
@@ -110,7 +110,7 @@ Upstreams (`upstreams.toml`):
 
 ## DNS Protocol Notes
 - UDP and DoT are supported for upstream recursion.
-- Only A/AAAA/CNAME answers are generated locally.
+- Only A/AAAA/CNAME/MX/TXT/PTR answers are generated locally.
 - Answer TTLs are fixed to 60 seconds in responses.
 - No response compression is implemented.
 - No TCP fallback or EDNS support.

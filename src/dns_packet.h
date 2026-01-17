@@ -12,6 +12,8 @@ enum {
     DNS_TYPE_A = 1,
     DNS_TYPE_CNAME = 5,
     DNS_TYPE_PTR = 12,
+    DNS_TYPE_MX = 15,
+    DNS_TYPE_TXT = 16,
     DNS_TYPE_AAAA = 28
 };
 
@@ -45,6 +47,16 @@ std::vector<unsigned char> BuildAAAAResponse(const DnsHeader &query_header,
 std::vector<unsigned char> BuildCNAMEResponse(const DnsHeader &query_header,
                                               const DnsQuestion &question,
                                               const std::string &target);
+std::vector<unsigned char> BuildPTRResponse(const DnsHeader &query_header,
+                                             const DnsQuestion &question,
+                                             const std::string &target);
+std::vector<unsigned char> BuildTXTResponse(const DnsHeader &query_header,
+                                             const DnsQuestion &question,
+                                             const std::string &text);
+std::vector<unsigned char> BuildMXResponse(const DnsHeader &query_header,
+                                            const DnsQuestion &question,
+                                            unsigned short preference,
+                                            const std::string &exchange);
 void PatchResponseId(std::vector<unsigned char> *packet, uint16_t id);
 bool ExtractFirstPtrTarget(const std::vector<unsigned char> &packet,
                            std::string *out_name);

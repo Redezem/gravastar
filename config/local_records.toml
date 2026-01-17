@@ -12,3 +12,18 @@ value = "fe80::1"
 name = "docs.local"
 type = "CNAME"
 value = "docs.example.com"
+
+[[record]]
+name = "mail.local"
+type = "MX"
+value = "10 mailhost.local"
+
+[[record]]
+name = "info.local"
+type = "TXT"
+value = "Gravastar local TXT record"
+
+[[record]]
+name = "1.0.0.127.in-addr.arpa"
+type = "PTR"
+value = "router.local"

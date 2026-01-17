@@ -2,6 +2,7 @@
 
 #include <dirent.h>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <string>
 #include <sys/stat.h>

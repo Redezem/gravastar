@@ -92,6 +92,18 @@ bool TestDnsPacket() {
     if (resp.size() < query.size()) {
         return false;
     }
+    std::vector<unsigned char> txt = gravastar::BuildTXTResponse(header, question, "hello");
+    if (txt.size() < query.size()) {
+        return false;
+    }
+    std::vector<unsigned char> mx = gravastar::BuildMXResponse(header, question, 10, "mail.example.com");
+    if (mx.size() < query.size()) {
+        return false;
+    }
+    std::vector<unsigned char> ptr = gravastar::BuildPTRResponse(header, question, "host.example.com");
+    if (ptr.size() < query.size()) {
+        return false;
+    }
     gravastar::PatchResponseId(&resp, 0xBEEF);
     if (ReadU16(resp, 0) != 0xBEEF) {
         return false;

@@ -31,6 +31,15 @@ unsigned short TypeFromString(const std::string &type) {
     if (type == "cname") {
         return DNS_TYPE_CNAME;
     }
+    if (type == "ptr") {
+        return DNS_TYPE_PTR;
+    }
+    if (type == "mx") {
+        return DNS_TYPE_MX;
+    }
+    if (type == "txt") {
+        return DNS_TYPE_TXT;
+    }
     return 0;
 }
 
