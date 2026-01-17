@@ -43,7 +43,22 @@ bool TestConfig() {
                    "[[record]]\n"
                    "name = \"router.local\"\n"
                    "type = \"A\"\n"
-                   "value = \"192.168.0.1\"\n")) {
+                   "value = \"192.168.0.1\"\n"
+                   "\n"
+                   "[[record]]\n"
+                   "name = \"mail.local\"\n"
+                   "type = \"MX\"\n"
+                   "value = \"10 mailhost.local\"\n"
+                   "\n"
+                   "[[record]]\n"
+                   "name = \"info.local\"\n"
+                   "type = \"TXT\"\n"
+                   "value = \"hello world\"\n"
+                   "\n"
+                   "[[record]]\n"
+                   "name = \"1.0.0.127.in-addr.arpa\"\n"
+                   "type = \"PTR\"\n"
+                   "value = \"router.local\"\n")) {
         return false;
     }
 
@@ -80,7 +95,7 @@ bool TestConfig() {
     if (!gravastar::ConfigLoader::LoadLocalRecords(local_path, &records, &err)) {
         return false;
     }
-    if (records.size() != 1 || records[0].name != "router.local") {
+    if (records.size() != 4 || records[0].name != "router.local") {
         return false;
     }
 

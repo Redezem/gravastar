@@ -45,6 +45,21 @@ cat > "$WORKDIR/local_records.toml" <<'CONF'
 name = "router.local"
 type = "A"
 value = "192.168.0.1"
+
+[[record]]
+name = "mail.local"
+type = "MX"
+value = "10 mailhost.local"
+
+[[record]]
+name = "info.local"
+type = "TXT"
+value = "hello world"
+
+[[record]]
+name = "1.0.0.127.in-addr.arpa"
+type = "PTR"
+value = "router.local"
 CONF
 
 cat > "$WORKDIR/upstreams.toml" <<'CONF'
@@ -86,6 +101,34 @@ fi
 EXT_OUT="$(dig @127.0.0.1 -p "$PORT" example.com A +time=2 +tries=1 +short | awk 'NR==1{print; exit}')"
 if [ -z "$EXT_OUT" ]; then
   echo "Expected DoT resolution to return an A record"
+  if [ -f "$WORKDIR/server.out" ]; then
+    cat "$WORKDIR/server.out"
+  fi
+  exit 1
+fi
+
+MX_OUT="$(dig @127.0.0.1 -p "$PORT" mail.local MX +time=1 +tries=1 +short | awk 'NR==1{print; exit}')"
+TXT_OUT="$(dig @127.0.0.1 -p "$PORT" info.local TXT +time=1 +tries=1 +short | awk 'NR==1{print; exit}')"
+PTR_OUT="$(dig @127.0.0.1 -p "$PORT" 1.0.0.127.in-addr.arpa PTR +time=1 +tries=1 +short | awk 'NR==1{print; exit}')"
+
+if [ "$MX_OUT" != "10 mailhost.local." ]; then
+  echo "Expected MX record '10 mailhost.local.', got: $MX_OUT"
+  if [ -f "$WORKDIR/server.out" ]; then
+    cat "$WORKDIR/server.out"
+  fi
+  exit 1
+fi
+
+if [ "$TXT_OUT" != "\"hello world\"" ]; then
+  echo "Expected TXT record \"hello world\", got: $TXT_OUT"
+  if [ -f "$WORKDIR/server.out" ]; then
+    cat "$WORKDIR/server.out"
+  fi
+  exit 1
+fi
+
+if [ "$PTR_OUT" != "router.local." ]; then
+  echo "Expected PTR record router.local., got: $PTR_OUT"
   if [ -f "$WORKDIR/server.out" ]; then
     cat "$WORKDIR/server.out"
   fi
