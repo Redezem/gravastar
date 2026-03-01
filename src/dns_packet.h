@@ -60,6 +60,8 @@ std::vector<unsigned char> BuildMXResponse(const DnsHeader &query_header,
 void PatchResponseId(std::vector<unsigned char> *packet, uint16_t id);
 bool ExtractFirstPtrTarget(const std::vector<unsigned char> &packet,
                            std::string *out_name);
+bool RewritePrivateARecordsToZero(std::vector<unsigned char> *packet,
+                                  bool *rewritten);
 
 } // namespace gravastar
 

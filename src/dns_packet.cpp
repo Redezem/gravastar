@@ -163,6 +163,22 @@ bool ReadName(const std::vector<unsigned char> &packet,
     return false;
 }
 
+bool IsPrivateIPv4(const unsigned char *addr) {
+    if (!addr) {
+        return false;
+    }
+    if (addr[0] == 10) {
+        return true;
+    }
+    if (addr[0] == 192 && addr[1] == 168) {
+        return true;
+    }
+    if (addr[0] == 172 && addr[1] >= 16 && addr[1] <= 31) {
+        return true;
+    }
+    return false;
+}
+
 } // namespace
 
 bool ParseDnsQuery(const std::vector<unsigned char> &packet, DnsHeader *header, DnsQuestion *question) {
@@ -322,6 +338,66 @@ std::vector<unsigned char> BuildMXResponse(const DnsHeader &query_header,
     WriteU16(&buf, static_cast<uint16_t>(rdata.size()));
     buf.insert(buf.end(), rdata.begin(), rdata.end());
     return buf;
+}
+
+bool RewritePrivateARecordsToZero(std::vector<unsigned char> *packet,
+                                  bool *rewritten) {
+    if (!packet || packet->size() < 12) {
+        return false;
+    }
+
+    bool replaced = false;
+    size_t offset = 12;
+    uint16_t qdcount = ReadU16(*packet, 4);
+    uint16_t ancount = ReadU16(*packet, 6);
+    uint16_t nscount = ReadU16(*packet, 8);
+    uint16_t arcount = ReadU16(*packet, 10);
+
+    for (uint16_t i = 0; i < qdcount; ++i) {
+        size_t end = 0;
+        if (!ReadName(*packet, offset, NULL, &end, 0)) {
+            return false;
+        }
+        if (end + 4 > packet->size()) {
+            return false;
+        }
+        offset = end + 4;
+    }
+
+    unsigned long rr_count = static_cast<unsigned long>(ancount) +
+                             static_cast<unsigned long>(nscount) +
+                             static_cast<unsigned long>(arcount);
+    for (unsigned long i = 0; i < rr_count; ++i) {
+        size_t end = 0;
+        if (!ReadName(*packet, offset, NULL, &end, 0)) {
+            return false;
+        }
+        if (end + 10 > packet->size()) {
+            return false;
+        }
+        uint16_t type = ReadU16(*packet, end);
+        uint16_t rdlength = ReadU16(*packet, end + 8);
+        size_t rdata_offset = end + 10;
+        if (rdata_offset + rdlength > packet->size()) {
+            return false;
+        }
+        if (type == DNS_TYPE_A && rdlength == 4) {
+            unsigned char *addr = &((*packet)[rdata_offset]);
+            if (IsPrivateIPv4(addr)) {
+                addr[0] = 0;
+                addr[1] = 0;
+                addr[2] = 0;
+                addr[3] = 0;
+                replaced = true;
+            }
+        }
+        offset = rdata_offset + rdlength;
+    }
+
+    if (rewritten) {
+        *rewritten = replaced;
+    }
+    return true;
 }
 
 void PatchResponseId(std::vector<unsigned char> *packet, uint16_t id) {

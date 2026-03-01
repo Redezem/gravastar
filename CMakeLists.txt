@@ -76,9 +76,11 @@ add_test(NAME gravastar_tests COMMAND gravastar_tests)
 add_test(NAME gravastar_integration COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration_dig.sh $<TARGET_FILE:gravastar>)
 add_test(NAME gravastar_integration_dot COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration_dot.sh $<TARGET_FILE:gravastar>)
 add_test(NAME gravastar_integration_upstream_blocklist COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration_upstream_blocklist.sh $<TARGET_FILE:gravastar>)
+add_test(NAME gravastar_integration_rebind COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration_rebind.sh $<TARGET_FILE:gravastar>)
 set_tests_properties(gravastar_integration PROPERTIES TIMEOUT 10)
 set_tests_properties(gravastar_integration_dot PROPERTIES TIMEOUT 30)
 set_tests_properties(gravastar_integration_upstream_blocklist PROPERTIES TIMEOUT 15)
+set_tests_properties(gravastar_integration_rebind PROPERTIES TIMEOUT 20)
 
 install(TARGETS gravastar RUNTIME DESTINATION /usr/local/bin)
 install(FILES

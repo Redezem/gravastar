@@ -335,6 +335,15 @@ bool DnsServer::ResolveQuery(const std::vector<unsigned char> &packet,
     DebugLog("Upstream resolution failed");
     result->response = BuildEmptyResponse(header, question);
   }
+  if (!result->response.empty() && config_.rebind_protection) {
+    bool rewritten = false;
+    if (!RewritePrivateARecordsToZero(&result->response, &rewritten)) {
+      DebugLog("Upstream response parse failed during rebind protection");
+      result->response = BuildEmptyResponse(header, question);
+    } else if (rewritten) {
+      DebugLog("Rebind protection rewrote upstream private A record(s) to 0.0.0.0");
+    }
+  }
   if (!result->response.empty() && cache_) {
     pthread_mutex_lock(&cache_mutex_);
     cache_->Put(key, result->response);

@@ -27,6 +27,18 @@ cmake --build build
 LibreSSL (libtls) is required for DNS-over-TLS. libcurl is required for
 upstream blocklist ingestion.
 
+## Test
+
+```sh
+bash tests/run_all_tests.sh
+```
+
+Optionally pass a build directory:
+
+```sh
+bash tests/run_all_tests.sh ./build
+```
+
 ## Run
 
 ```sh
@@ -94,6 +106,12 @@ Supported formats: hosts-style, domain-per-line, and simple ABP `||domain^`. Thi
 ## Notes
 
 - `dot_verify` in `gravastar.toml` controls TLS verification for DoT.
+- `rebind_protection` in `gravastar.toml` defaults to `true` and rewrites
+  upstream RFC1918 IPv4 A answers (`10.0.0.0/8`, `172.16.0.0/12`,
+  `192.168.0.0/16`) to `0.0.0.0` before responding/caching; set it to `false`
+  to disable this behavior.
+- Rebind protection only applies to upstream answers; local records are allowed
+  to return local/private addresses.
 - `log_level` in `gravastar.toml` controls controller logging verbosity
   (`debug`, `info`, `warn`, `error`), default `debug`.
 - For DoT, upstreams can be specified as `host@ip:port` to use SNI hostname

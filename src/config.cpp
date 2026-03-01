@@ -143,6 +143,7 @@ bool ConfigLoader::LoadMainConfig(const std::string &path, ServerConfig *out, st
     out->cache_size_bytes = 100 * 1024 * 1024;
     out->cache_ttl_sec = 120;
     out->dot_verify = true;
+    out->rebind_protection = true;
     out->log_level = "debug";
     out->blocklist_file = "blocklist.toml";
     out->local_records_file = "local_records.toml";
@@ -199,6 +200,13 @@ bool ConfigLoader::LoadMainConfig(const std::string &path, ServerConfig *out, st
                 return false;
             }
             out->dot_verify = v;
+        } else if (key == "rebind_protection") {
+            bool v = true;
+            if (!ParseBool(value, &v)) {
+                if (err) *err = "invalid rebind_protection";
+                return false;
+            }
+            out->rebind_protection = v;
         } else if (key == "log_level") {
             std::string v;
             if (!ParseQuotedString(value, &v)) {

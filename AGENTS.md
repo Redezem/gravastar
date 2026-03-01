@@ -48,8 +48,13 @@ This codebase aims to stay portable across POSIX platforms (Linux/BSD/macOS).
   - `ctest --test-dir build -R gravastar_integration -V`
   - `ctest --test-dir build -R gravastar_integration_dot -V`
   - `ctest --test-dir build -R gravastar_integration_upstream_blocklist -V`
+  - `ctest --test-dir build -R gravastar_integration_rebind -V`
+- All tests (build + unit + integration):
+  - `bash tests/run_all_tests.sh`
 - Integration tests create a temp config dir under `/tmp` and bind to
-  `127.0.0.1:18053`/`127.0.0.1:18054`/`127.0.0.1:18055`. If these ports are in use, tests fail.
+  `127.0.0.1:18053`/`127.0.0.1:18054`/`127.0.0.1:18055`/`127.0.0.1:18056`.
+  The rebind integration test also starts a mock upstream on `127.0.0.1:53`.
+  If these ports are in use, tests fail (or skip for the mock upstream bind case).
 
 ## Runtime Notes
 - Default config dir is `/etc/gravastar` (override with `-c`).
@@ -66,6 +71,8 @@ Main config (`gravastar.toml`):
 - `cache_size_mb` (int): cache size in MB, default `100`
 - `cache_ttl_sec` (int): cache TTL in seconds, default `120`
 - `dot_verify` (bool): verify DoT TLS certificates, default `true`
+- `rebind_protection` (bool): rewrite upstream RFC1918 IPv4 A answers to
+  `0.0.0.0`, default `true` (local records are unaffected)
 - `log_level` (string): controller log level (`debug`, `info`, `warn`, `error`)
 - `blocklist_file` (string): relative path to blocklist TOML
 - `local_records_file` (string): relative path to local records TOML
@@ -97,7 +104,8 @@ Upstreams (`upstreams.toml`):
 3. Local records: if matching name/type, return A/AAAA/CNAME.
 4. Cache: lookup full response packet by key `qname|qtype`.
 5. Upstream: forward full query over DoT to the first DoT server (if configured),
-   else UDP to the first upstream server, cache response, and return.
+   else UDP to the first upstream server; if `rebind_protection` is enabled,
+   rewrite upstream private IPv4 A records to `0.0.0.0`; then cache and return.
 6. Upstream blocklist updater merges upstream domains with custom `blocklist.toml`
    and writes `/var/gravastar/blocklist.generated.toml`.
 

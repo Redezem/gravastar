@@ -28,6 +28,7 @@ bool TestConfig() {
                    "cache_size_mb = 1\n"
                    "cache_ttl_sec = 10\n"
                    "dot_verify = false\n"
+                   "rebind_protection = false\n"
                    "log_level = \"warn\"\n"
                    "blocklist_file = \"blocklist.toml\"\n"
                    "local_records_file = \"local_records.toml\"\n"
@@ -77,6 +78,9 @@ bool TestConfig() {
         return false;
     }
     if (cfg.dot_verify) {
+        return false;
+    }
+    if (cfg.rebind_protection) {
         return false;
     }
     if (cfg.log_level != "warn") {
