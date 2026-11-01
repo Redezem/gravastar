@@ -3,7 +3,9 @@
 
 #include <arpa/inet.h>
 #include <cstring>
+#include <netinet/in.h>
 #include <string>
+#include <sys/socket.h>
 #include <vector>
 
 bool TestParseHostPort() {
