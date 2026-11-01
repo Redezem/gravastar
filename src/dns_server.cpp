@@ -101,7 +101,7 @@ DnsServer::~DnsServer() {
   pthread_mutex_destroy(&cache_mutex_);
 }
 
-bool DnsServer::Run() {
+bool DnsServer::Bind() {
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
   if (sock < 0) {
     DebugLog(std::string("socket() failed: ") + std::strerror(errno));
@@ -132,11 +132,20 @@ bool DnsServer::Run() {
     close(sock);
     return false;
   }
+  sock_ = sock;
+  return true;
+}
+
+bool DnsServer::Run() {
+  // Bind() may already have been called by main() while still privileged
+  // (port 53 must be bound before dropping to the daemon user).
+  if (sock_ < 0 && !Bind()) {
+    return false;
+  }
 
   std::signal(SIGINT, HandleSignal);
   std::signal(SIGTERM, HandleSignal);
 
-  sock_ = sock;
   running_ = true;
   {
     std::ostringstream out;
@@ -153,11 +162,11 @@ bool DnsServer::Run() {
   while (g_running) {
     fd_set readfds;
     FD_ZERO(&readfds);
-    FD_SET(sock, &readfds);
+    FD_SET(sock_, &readfds);
     struct timeval tv;
     tv.tv_sec = 1;
     tv.tv_usec = 0;
-    int ready = select(sock + 1, &readfds, NULL, NULL, &tv);
+    int ready = select(sock_ + 1, &readfds, NULL, NULL, &tv);
     if (ready < 0) {
       DebugLog(std::string("select() failed: ") + std::strerror(errno));
       continue;
@@ -165,7 +174,7 @@ bool DnsServer::Run() {
     if (ready == 0) {
       continue;
     }
-    if (!FD_ISSET(sock, &readfds)) {
+    if (!FD_ISSET(sock_, &readfds)) {
       continue;
     }
     for (;;) {
@@ -173,7 +182,7 @@ bool DnsServer::Run() {
       struct sockaddr_in client_addr;
       socklen_t client_len = sizeof(client_addr);
       ssize_t received = recvfrom(
-          sock, buf, sizeof(buf), 0,
+          sock_, buf, sizeof(buf), 0,
           reinterpret_cast<struct sockaddr *>(&client_addr), &client_len);
       if (received < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -207,7 +216,7 @@ bool DnsServer::Run() {
   }
 
   StopWorkers();
-  close(sock);
+  close(sock_);
   sock_ = -1;
   return true;
 }

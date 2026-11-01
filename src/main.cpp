@@ -169,13 +169,23 @@ int main(int argc, char **argv) {
         std::string generated_path = JoinPath(upstream_config.cache_dir, "blocklist.generated.toml");
         updater = new gravastar::UpstreamBlocklistUpdater(
             upstream_config, block_path, generated_path, &blocklist);
-        updater->Start();
     }
 
-    // Lock the process down before entering the serve loop. Everything that
-    // is opened lazily at runtime must be covered here: log files (rotation
-    // reopens and forks gzip), generated blocklists, and CA bundles for DoT.
+    // Bind first (port 53 needs root), then drop to the unprivileged daemon
+    // user, then lock the process down. Everything that is opened lazily at
+    // runtime must be covered by the sandbox: log files (rotation reopens and
+    // forks gzip), generated blocklists, and CA bundles for DoT.
     {
+        if (!server.Bind()) {
+            gravastar::LogError("Failed to bind listen socket");
+            std::cerr << "Failed to bind listen socket\n";
+            return 1;
+        }
+        if (!gravastar::DropPrivileges(config.drop_priv_user)) {
+            gravastar::LogError("Refusing to start: privilege drop failed");
+            std::cerr << "Refusing to start: privilege drop failed\n";
+            return 1;
+        }
         std::vector<std::string> read_paths;
         read_paths.push_back(config_dir);
         read_paths.push_back("/etc/ssl");      // Linux CA store
@@ -190,11 +200,12 @@ int main(int argc, char **argv) {
         if (!gravastar::ApplyOsSandbox(read_paths, rw_paths, exec_paths)) {
             gravastar::LogError("Refusing to start: OS sandbox could not be applied");
             std::cerr << "Refusing to start: OS sandbox could not be applied\n";
-            if (updater) {
-                updater->Stop();
-                delete updater;
-            }
             return 1;
+        }
+        // Start helper threads last: their files and sockets are created
+        // under the unprivileged user and inside the sandbox.
+        if (updater) {
+            updater->Start();
         }
     }
 

@@ -27,6 +27,9 @@ public:
     ~DnsServer();
 
     bool Run();
+    // Create and bind the listening socket without entering the loop, so
+    // main() can bind privileged ports while root, then drop privileges.
+    bool Bind();
 
 private:
     enum ResolveSource {

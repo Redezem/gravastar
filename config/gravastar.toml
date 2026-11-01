@@ -18,3 +18,7 @@ allow_udp_fallback = false
 max_queue_jobs = 512
 # When non-empty, only these clients are served (IPv4 exact or CIDR), e.g.:
 # allowed_clients = ["10.1.0.0/16", "192.168.1.5"]
+
+# After binding the (privileged) listen port, drop to this unprivileged user
+# before entering the serve loop. Empty keeps the current user.
+drop_priv_user = ""

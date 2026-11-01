@@ -16,6 +16,11 @@ bool ApplyOsSandbox(const std::vector<std::string> &read_paths,
                     const std::vector<std::string> &readwrite_paths,
                     const std::vector<std::string> &exec_paths);
 
+// Drops the process to the given user (setgid/setuid/initgroups) after the
+// privileged port has been bound. Empty user is a no-op. Fails closed: an
+// unknown user or failed set* call returns false and the caller must abort.
+bool DropPrivileges(const std::string &user);
+
 } // namespace gravastar
 
 #endif // GRAVASTAR_SANDBOX_H

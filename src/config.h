@@ -17,6 +17,7 @@ struct ServerConfig {
     bool allow_udp_fallback;
     size_t max_queue_jobs;
     std::vector<std::string> allowed_clients;
+    std::string drop_priv_user;
     std::string log_level;
     std::string blocklist_file;
     std::string local_records_file;

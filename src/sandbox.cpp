@@ -6,6 +6,12 @@
 #include <sys/stat.h>
 #include <vector>
 
+#if !defined(_WIN32)
+#include <grp.h>
+#include <pwd.h>
+#include <unistd.h>
+#endif
+
 #if defined(__OpenBSD__)
 extern "C" int pledge(const char *promises, const char *paths[]);
 extern "C" int unveil(const char *path, const char *perm);
@@ -76,6 +82,44 @@ bool ApplyOsSandbox(const std::vector<std::string> &read_paths,
     (void)exec_paths;
 #endif
     return true;
+}
+
+bool DropPrivileges(const std::string &user) {
+#if defined(_WIN32)
+    (void)user;
+    return true;
+#else
+    if (user.empty()) {
+        return true;
+    }
+    struct passwd *pw = getpwnam(user.c_str());
+    if (!pw) {
+        LogError("drop_priv_user: unknown user: " + user);
+        return false;
+    }
+    if (geteuid() == 0) {
+        if (initgroups(pw->pw_name, pw->pw_gid) != 0) {
+            LogError("drop_priv_user: initgroups failed for " + user);
+            return false;
+        }
+        if (setgid(pw->pw_gid) != 0) {
+            LogError("drop_priv_user: setgid failed for " + user);
+            return false;
+        }
+        if (setuid(pw->pw_uid) != 0) {
+            LogError("drop_priv_user: setuid failed for " + user);
+            return false;
+        }
+        LogInfo("Dropped privileges to user: " + user);
+        return true;
+    }
+    if (getuid() == pw->pw_uid) {
+        // Already running as the requested user (e.g. daemon -u); nothing to do.
+        return true;
+    }
+    LogError("drop_priv_user: not root and not already " + user + "; refusing");
+    return false;
+#endif
 }
 
 } // namespace gravastar
