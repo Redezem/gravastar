@@ -46,7 +46,9 @@ bool ApplyOsSandbox(const std::vector<std::string> &read_paths,
         if (readwrite_paths[i].empty()) {
             continue;
         }
-        if (unveil(readwrite_paths[i].c_str(), "rw") != 0) {
+        /* "c" is OpenBSD veil's create-new-file permission: rotation and
+         * atomic-rename helpers create files, "rw" alone is not enough. */
+        if (unveil(readwrite_paths[i].c_str(), "rwc") != 0) {
             std::cerr << "unveil(rw) failed for " << readwrite_paths[i] << " (uid=" << getuid() << "): " << std::strerror(errno) << "\n"; LogError("unveil(rw) failed for " + readwrite_paths[i]);
             return false;
         }
