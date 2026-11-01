@@ -26,16 +26,18 @@ bool ApplyOsSandbox(const std::vector<std::string> &read_paths,
                     const std::vector<std::string> &readwrite_paths,
                     const std::vector<std::string> &exec_paths) {
 #if defined(__OpenBSD__)
+    // NOTE: OpenBSD hides every not-yet-unveiled path (ENOENT) from the
+    // moment the first unveil(path) call succeeds. Probing with stat()
+    // between unveils therefore lies; let unveil itself report ENOENT.
     for (size_t i = 0; i < read_paths.size(); ++i) {
         if (read_paths[i].empty()) {
             continue;
         }
-        struct stat st;
-        if (stat(read_paths[i].c_str(), &st) != 0) {
-            // Candidate path (e.g. distro-specific CA stores); absent is fine.
-            continue;
-        }
         if (unveil(read_paths[i].c_str(), "r") != 0) {
+            if (errno == ENOENT) {
+                // Candidate path (e.g. distro-specific CA store); absent is fine.
+                continue;
+            }
             std::cerr << "unveil(r) failed for " << read_paths[i] << ": " << std::strerror(errno) << "\n"; LogError("unveil(r) failed for " + read_paths[i]);
             return false;
         }
@@ -44,13 +46,8 @@ bool ApplyOsSandbox(const std::vector<std::string> &read_paths,
         if (readwrite_paths[i].empty()) {
             continue;
         }
-        struct stat st;
-        if (stat(readwrite_paths[i].c_str(), &st) != 0) {
-            std::cerr << "unveil(rw) target missing: " << readwrite_paths[i] << " (uid=" << getuid() << "): " << std::strerror(errno) << "\n"; LogError("unveil(rw) target missing: " + readwrite_paths[i]);
-            return false;
-        }
         if (unveil(readwrite_paths[i].c_str(), "rw") != 0) {
-            std::cerr << "unveil(rw) failed for " << readwrite_paths[i] << ": " << std::strerror(errno) << "\n"; LogError("unveil(rw) failed for " + readwrite_paths[i]);
+            std::cerr << "unveil(rw) failed for " << readwrite_paths[i] << " (uid=" << getuid() << "): " << std::strerror(errno) << "\n"; LogError("unveil(rw) failed for " + readwrite_paths[i]);
             return false;
         }
     }
@@ -58,11 +55,10 @@ bool ApplyOsSandbox(const std::vector<std::string> &read_paths,
         if (exec_paths[i].empty()) {
             continue;
         }
-        struct stat st;
-        if (stat(exec_paths[i].c_str(), &st) != 0) {
-            continue;
-        }
         if (unveil(exec_paths[i].c_str(), "x") != 0) {
+            if (errno == ENOENT) {
+                continue;
+            }
             std::cerr << "unveil(x) failed for " << exec_paths[i] << ": " << std::strerror(errno) << "\n"; LogError("unveil(x) failed for " + exec_paths[i]);
             return false;
         }
