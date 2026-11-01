@@ -13,8 +13,8 @@
 #endif
 
 #if defined(__OpenBSD__)
-extern "C" int pledge(const char *promises, const char *paths[]);
-extern "C" int unveil(const char *path, const char *perm);
+// OpenBSD declares pledge(2)/unveil(2) in <unistd.h>.
+#include <unistd.h>
 #endif
 
 namespace gravastar {
