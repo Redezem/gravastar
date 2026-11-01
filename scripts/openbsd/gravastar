@@ -11,10 +11,10 @@ daemon="/usr/local/bin/gravastar"
 # unveil+pledge. Create the account once before enabling:
 #   doas useradd -c "gravastar daemon" -d /var/gravastar -s /sbin/false \
 #       -w no _gravastar
-# and chown its state: mkdir -p /var/gravastar/log && chown -R _gravastar \
-# /var/gravastar (point GRAVASTAR_LOG_DIR at /var/gravastar/log in the
-# environment below; it also owns the generated-blocklist cache dir).
-export GRAVASTAR_LOG_DIR=/var/gravastar/log
+# and chown its state: chown -R _gravastar /var/gravastar (the generated-
+# blocklist cache dir) and chown -R _gravastar /var/log/gravastar (the
+# default log dir; rcctl's rcexec sanitizes the environment, so custom
+# GRAVASTAR_LOG_DIR values set in this script never reach the daemon).
 
 rc_reload=NO
 rc_bg=YES
