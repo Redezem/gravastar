@@ -20,6 +20,10 @@ public:
                     std::vector<unsigned char> *response,
                     std::string *used_server);
 
+    // True when at least one DoT server is configured; callers use this to
+    // tell "DoT failed, downgrading" from "plain UDP is the configured path".
+    bool HasDotServers() const { return !dot_servers_.empty(); }
+
 private:
     std::vector<std::string> udp_servers_;
     std::vector<std::string> dot_servers_;

@@ -8,3 +8,13 @@ log_level = "debug"
 blocklist_file = "blocklist.toml"
 local_records_file = "local_records.toml"
 upstreams_file = "upstreams.toml"
+
+# Security options (defaults shown; see gravastar security review 2026-11-01):
+# With DoT upstreams configured, a DoT failure never silently downgrades to
+# plaintext UDP unless this is true. UDP-only deployments are unaffected.
+allow_udp_fallback = false
+# Bound on pending query queue; excess queries are dropped (bounded memory
+# under flood load).
+max_queue_jobs = 512
+# When non-empty, only these clients are served (IPv4 exact or CIDR), e.g.:
+# allowed_clients = ["10.1.0.0/16", "192.168.1.5"]

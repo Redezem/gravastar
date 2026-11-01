@@ -27,6 +27,14 @@ bool DnsCache::Get(const std::string &key, std::vector<unsigned char> *out) {
 }
 
 void DnsCache::Put(const std::string &key, const std::vector<unsigned char> &response) {
+    Put(key, response, ttl_sec_);
+}
+
+void DnsCache::Put(const std::string &key, const std::vector<unsigned char> &response,
+                   unsigned int ttl_sec) {
+    if (ttl_sec == 0) {
+        return;
+    }
     EvictExpired();
     std::map<std::string, Entry>::iterator it = entries_.find(key);
     if (it != entries_.end()) {
@@ -37,7 +45,7 @@ void DnsCache::Put(const std::string &key, const std::vector<unsigned char> &res
     Entry entry;
     entry.response = response;
     entry.size = response.size();
-    entry.expiry = std::time(NULL) + ttl_sec_;
+    entry.expiry = std::time(NULL) + static_cast<time_t>(ttl_sec);
     lru_.push_back(key);
     entry.lru_it = --lru_.end();
     entries_[key] = entry;

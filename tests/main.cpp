@@ -3,11 +3,16 @@
 bool TestCache();
 bool TestConfig();
 bool TestDnsPacket();
+bool TestDnsRebindRanges();
+bool TestDnsResponseValidation();
+bool TestDnsMinTtl();
 bool TestLoggingRotation();
 bool TestLoggingFailurePath();
 bool TestControllerLoggerRotation();
 bool TestControllerLogLevelFilter();
 bool TestParseHostPort();
+bool TestLogFieldSanitize();
+bool TestClientAcl();
 bool TestUpstreamBlocklistParse();
 bool TestUpstreamBlocklistCacheFallback();
 
@@ -23,6 +28,18 @@ int main() {
     }
     if (!TestDnsPacket()) {
         std::cerr << "TestDnsPacket failed\n";
+        failures++;
+    }
+    if (!TestDnsRebindRanges()) {
+        std::cerr << "TestDnsRebindRanges failed\n";
+        failures++;
+    }
+    if (!TestDnsResponseValidation()) {
+        std::cerr << "TestDnsResponseValidation failed\n";
+        failures++;
+    }
+    if (!TestDnsMinTtl()) {
+        std::cerr << "TestDnsMinTtl failed\n";
         failures++;
     }
     if (!TestLoggingRotation()) {
@@ -43,6 +60,14 @@ int main() {
     }
     if (!TestParseHostPort()) {
         std::cerr << "TestParseHostPort failed\n";
+        failures++;
+    }
+    if (!TestLogFieldSanitize()) {
+        std::cerr << "TestLogFieldSanitize failed\n";
+        failures++;
+    }
+    if (!TestClientAcl()) {
+        std::cerr << "TestClientAcl failed\n";
         failures++;
     }
     if (!TestUpstreamBlocklistParse()) {

@@ -6,6 +6,15 @@ daemon="/usr/local/bin/gravastar"
 
 . /etc/rc.d/rc.subr
 
+# Run unprivileged (rc.subr passes this to daemon -u). Create the account
+# once before enabling:
+#   useradd -D -c gravastar -d /var/gravastar -s /sbin/false -w no _gravastar
+# and chown its state: mkdir -p /var/gravastar/log && chown -R _gravastar \
+# /var/gravastar (point GRAVASTAR_LOG_DIR at /var/gravastar/log in the
+# environment below), and chown the generated-blocklist cache dir too.
+daemonuser="_gravastar"
+env+=("GRAVASTAR_LOG_DIR=/var/gravastar/log")
+
 rc_reload=NO
 rc_bg=YES
 

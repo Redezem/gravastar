@@ -14,7 +14,8 @@ enum {
     DNS_TYPE_PTR = 12,
     DNS_TYPE_MX = 15,
     DNS_TYPE_TXT = 16,
-    DNS_TYPE_AAAA = 28
+    DNS_TYPE_AAAA = 28,
+    DNS_TYPE_OPT = 41
 };
 
 struct DnsHeader {
@@ -60,8 +61,23 @@ std::vector<unsigned char> BuildMXResponse(const DnsHeader &query_header,
 void PatchResponseId(std::vector<unsigned char> *packet, uint16_t id);
 bool ExtractFirstPtrTarget(const std::vector<unsigned char> &packet,
                            std::string *out_name);
+// Rewrites upstream answers that point at private/loopback/link-local/shared
+// address-space ranges: A records to 0.0.0.0 and AAAA records to ::.
+// Covers RFC1918, loopback, link-local, CGNAT (100.64/10), TEST-NET ranges,
+// 0/8, and the IPv6 equivalents (loopback, ULA, link-local, ::, plus
+// IPv4-mapped and 6to4 embeddings of the IPv4 private ranges).
 bool RewritePrivateARecordsToZero(std::vector<unsigned char> *packet,
                                   bool *rewritten);
+// True only if `response` is a response packet whose transaction ID and
+// question section (name, type, class; case-insensitive) match `query`.
+// Guards against accepting an unrelated or spoofed upstream reply.
+bool ValidateResponseMatchesQuery(const std::vector<unsigned char> &response,
+                                  const std::vector<unsigned char> &query);
+// Smallest record TTL present in the response (ANS/ADD sections; OPT records
+// are skipped; a zero TTL yields *min_ttl = 0, meaning do-not-cache).
+// Returns false when the packet has no cacheable records.
+bool GetResponseMinRecordTtl(const std::vector<unsigned char> &response,
+                             unsigned int *min_ttl);
 
 } // namespace gravastar
 

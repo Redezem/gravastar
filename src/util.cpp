@@ -2,7 +2,9 @@
 
 #include "controller_logger.h"
 
+#include <arpa/inet.h>
 #include <cctype>
+#include <cstdlib>
 #include <iostream>
 
 namespace gravastar {
@@ -140,6 +142,65 @@ void LogInternal(LogLevel level, const std::string &msg) {
 
 void LogInfo(const std::string &msg) {
     LogInternal(LOG_INFO, msg);
+}
+
+std::string SanitizeLogField(const std::string &s) {
+    std::string out = s;
+    for (size_t i = 0; i < out.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(out[i]);
+        if (c <= 0x20 || c == 0x7F) {
+            out[i] = '_';
+        }
+    }
+    return out;
+}
+
+bool ClientAllowed(const struct sockaddr_in &client,
+                   const std::vector<std::string> &allowed) {
+    if (allowed.empty()) {
+        return true;
+    }
+    uint32_t client_ip = ntohl(client.sin_addr.s_addr);
+    for (size_t i = 0; i < allowed.size(); ++i) {
+        std::string entry = Trim(allowed[i]);
+        if (entry.empty()) {
+            continue;
+        }
+        std::string base = entry;
+        unsigned int bits = 32;
+        size_t slash = entry.find('/');
+        if (slash != std::string::npos) {
+            base = Trim(entry.substr(0, slash));
+            std::string bits_str = Trim(entry.substr(slash + 1));
+            if (bits_str.empty() || bits_str.size() > 2) {
+                continue;
+            }
+            bool digits = true;
+            for (size_t j = 0; j < bits_str.size(); ++j) {
+                if (bits_str[j] < '0' || bits_str[j] > '9') {
+                    digits = false;
+                    break;
+                }
+            }
+            if (!digits) {
+                continue;
+            }
+            bits = static_cast<unsigned int>(std::strtoul(bits_str.c_str(), 0, 10));
+            if (bits > 32) {
+                continue;
+            }
+        }
+        struct in_addr base_addr;
+        if (inet_pton(AF_INET, base.c_str(), &base_addr) != 1) {
+            continue;
+        }
+        uint32_t network = ntohl(base_addr.s_addr);
+        uint32_t mask = bits == 0 ? 0u : (~0u << (32 - bits));
+        if ((client_ip & mask) == (network & mask)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void LogWarn(const std::string &msg) {

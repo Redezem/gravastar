@@ -144,6 +144,9 @@ bool ConfigLoader::LoadMainConfig(const std::string &path, ServerConfig *out, st
     out->cache_ttl_sec = 120;
     out->dot_verify = true;
     out->rebind_protection = true;
+    out->allow_udp_fallback = false;
+    out->max_queue_jobs = 512;
+    out->allowed_clients.clear();
     out->log_level = "debug";
     out->blocklist_file = "blocklist.toml";
     out->local_records_file = "local_records.toml";
@@ -207,6 +210,27 @@ bool ConfigLoader::LoadMainConfig(const std::string &path, ServerConfig *out, st
                 return false;
             }
             out->rebind_protection = v;
+        } else if (key == "allow_udp_fallback") {
+            bool v = true;
+            if (!ParseBool(value, &v)) {
+                if (err) *err = "invalid allow_udp_fallback";
+                return false;
+            }
+            out->allow_udp_fallback = v;
+        } else if (key == "max_queue_jobs") {
+            unsigned long v = 0;
+            if (!ParseInteger(value, &v) || v == 0 || v > 1000000) {
+                if (err) *err = "invalid max_queue_jobs";
+                return false;
+            }
+            out->max_queue_jobs = static_cast<size_t>(v);
+        } else if (key == "allowed_clients") {
+            std::vector<std::string> v;
+            if (!ParseStringArray(value, &v)) {
+                if (err) *err = "invalid allowed_clients";
+                return false;
+            }
+            out->allowed_clients = v;
         } else if (key == "log_level") {
             std::string v;
             if (!ParseQuotedString(value, &v)) {

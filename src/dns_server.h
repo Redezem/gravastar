@@ -51,6 +51,7 @@ private:
 
     bool HandleQuery(int sock, const std::vector<unsigned char> &packet,
                      const struct sockaddr_in &client_addr, socklen_t client_len);
+    bool IsClientAllowed(const struct sockaddr_in &client_addr) const;
     bool ResolveQuery(const std::vector<unsigned char> &packet,
                       const DnsHeader &header,
                       const DnsQuestion &question,
@@ -72,6 +73,7 @@ private:
     int sock_;
     bool running_;
     size_t worker_count_;
+    unsigned long dropped_jobs_;
     std::deque<Job> queue_;
     pthread_mutex_t queue_mutex_;
     pthread_cond_t queue_cv_;

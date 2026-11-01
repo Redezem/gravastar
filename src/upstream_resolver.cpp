@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <pthread.h>
 #include <sstream>
 #include <sys/select.h>
 #include <sys/socket.h>
@@ -166,6 +167,18 @@ bool ConnectTcp(const std::string &host, int port, int timeout_sec, int *out_fd)
     }
     freeaddrinfo(res);
     return *out_fd >= 0;
+}
+
+static pthread_once_t g_tls_once = PTHREAD_ONCE_INIT;
+static bool g_tls_ok = false;
+
+void InitTlsOnce() {
+    if (tls_init() != 0) {
+        DebugLog("DoT tls_init failed");
+        g_tls_ok = false;
+    } else {
+        g_tls_ok = true;
+    }
 }
 
 bool ConfigureTls(struct tls_config *cfg) {
@@ -338,6 +351,13 @@ bool UpstreamResolver::ResolveUdp(const std::vector<unsigned char> &query,
     if (used_server) {
         *used_server = udp_servers_[0];
     }
+    // Accept "addr" (default port 53) or "addr:port" like the DoT servers do.
+    std::string udp_host;
+    int udp_port = 53;
+    if (!ParseHostPort(udp_servers_[0], 53, &udp_host, &udp_port)) {
+        DebugLog(std::string("invalid upstream UDP server: ") + udp_servers_[0]);
+        return false;
+    }
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
         DebugLog(std::string("upstream socket() failed: ") + std::strerror(errno));
@@ -346,10 +366,10 @@ bool UpstreamResolver::ResolveUdp(const std::vector<unsigned char> &query,
     struct sockaddr_in addr;
     std::memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(53);
+    addr.sin_port = htons(static_cast<unsigned short>(udp_port));
 
-    if (inet_pton(AF_INET, udp_servers_[0].c_str(), &addr.sin_addr) != 1) {
-        DebugLog(std::string("upstream inet_pton failed for: ") + udp_servers_[0]);
+    if (inet_pton(AF_INET, udp_host.c_str(), &addr.sin_addr) != 1) {
+        DebugLog(std::string("upstream inet_pton failed for: ") + udp_host);
         close(sock);
         return false;
     }
@@ -404,13 +424,9 @@ bool UpstreamResolver::ResolveDot(const std::vector<unsigned char> &query,
     if (dot_servers_.empty()) {
         return false;
     }
-    static bool tls_inited = false;
-    if (!tls_inited) {
-        if (tls_init() != 0) {
-            DebugLog("DoT tls_init failed");
-            return false;
-        }
-        tls_inited = true;
+    pthread_once(&g_tls_once, InitTlsOnce);
+    if (!g_tls_ok) {
+        return false;
     }
     std::string host;
     std::string connect_host;
@@ -439,10 +455,13 @@ bool UpstreamResolver::ResolveDot(const std::vector<unsigned char> &query,
     }
     bool insecure = !dot_verify_;
     if (!insecure && !ConfigureTls(cfg)) {
-        DebugLog("DoT using insecure TLS config (no CA found)");
-        tls_config_insecure_noverifycert(cfg);
-        tls_config_insecure_noverifyname(cfg);
-        insecure = true;
+        // Fail closed: without CA trust material we cannot verify the server,
+        // and silently connecting unverified would expose DoT to interception.
+        LogError("DoT: no CA trust anchors found; refusing unverified connection "
+                 "(install a CA bundle or set dot_verify=false deliberately)");
+        tls_config_free(cfg);
+        close(sock);
+        return false;
     }
     if (insecure) {
         DebugLog("DoT TLS verification disabled");

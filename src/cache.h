@@ -16,6 +16,9 @@ public:
 
     bool Get(const std::string &key, std::vector<unsigned char> *out);
     void Put(const std::string &key, const std::vector<unsigned char> &response);
+    // Put with an explicit entry TTL (seconds); 0 skips caching entirely.
+    void Put(const std::string &key, const std::vector<unsigned char> &response,
+             unsigned int ttl_sec);
 
     size_t size_bytes() const { return current_bytes_; }
     size_t max_bytes() const { return max_bytes_; }

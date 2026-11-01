@@ -5,6 +5,7 @@
 #include "local_records.h"
 #include "controller_logger.h"
 #include "query_logger.h"
+#include "sandbox.h"
 #include "upstream_blocklist.h"
 #include "upstream_resolver.h"
 #include "util.h"
@@ -170,6 +171,33 @@ int main(int argc, char **argv) {
             upstream_config, block_path, generated_path, &blocklist);
         updater->Start();
     }
+
+    // Lock the process down before entering the serve loop. Everything that
+    // is opened lazily at runtime must be covered here: log files (rotation
+    // reopens and forks gzip), generated blocklists, and CA bundles for DoT.
+    {
+        std::vector<std::string> read_paths;
+        read_paths.push_back(config_dir);
+        read_paths.push_back("/etc/ssl");      // Linux CA store
+        read_paths.push_back("/etc/openssl");  // OpenBSD CA store
+        std::vector<std::string> rw_paths;
+        rw_paths.push_back(log_dir);
+        if (upstream_mode) {
+            rw_paths.push_back(upstream_config.cache_dir);
+        }
+        std::vector<std::string> exec_paths;
+        exec_paths.push_back("/usr/bin");
+        if (!gravastar::ApplyOsSandbox(read_paths, rw_paths, exec_paths)) {
+            gravastar::LogError("Refusing to start: OS sandbox could not be applied");
+            std::cerr << "Refusing to start: OS sandbox could not be applied\n";
+            if (updater) {
+                updater->Stop();
+                delete updater;
+            }
+            return 1;
+        }
+    }
+
     if (!server.Run()) {
         gravastar::LogError("Failed to start DNS server");
         std::cerr << "Failed to start DNS server\n";

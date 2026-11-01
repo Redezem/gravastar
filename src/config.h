@@ -14,6 +14,9 @@ struct ServerConfig {
     unsigned int cache_ttl_sec;
     bool dot_verify;
     bool rebind_protection;
+    bool allow_udp_fallback;
+    size_t max_queue_jobs;
+    std::vector<std::string> allowed_clients;
     std::string log_level;
     std::string blocklist_file;
     std::string local_records_file;

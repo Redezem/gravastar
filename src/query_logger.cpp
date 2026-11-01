@@ -158,14 +158,17 @@ std::string QueryLogger::BuildLine(const std::string &client_ip,
                                    const std::string &resolved_by,
                                    const std::string &upstream) const {
     std::ostringstream out;
+    // client_name and qname originate from client-controllable input (reverse
+    // DNS answers and the query's QNAME); sanitise every field so a hostile
+    // value cannot forge additional log lines or fields.
     out << "ts=" << NowString()
-        << " client_ip=" << client_ip
-        << " client_name=" << client_name
-        << " qname=" << qname
-        << " qtype=" << qtype
-        << " resolved_by=" << resolved_by;
+        << " client_ip=" << SanitizeLogField(client_ip)
+        << " client_name=" << SanitizeLogField(client_name)
+        << " qname=" << SanitizeLogField(qname)
+        << " qtype=" << SanitizeLogField(qtype)
+        << " resolved_by=" << SanitizeLogField(resolved_by);
     if (!upstream.empty()) {
-        out << " upstream=" << upstream;
+        out << " upstream=" << SanitizeLogField(upstream);
     }
     return out.str();
 }

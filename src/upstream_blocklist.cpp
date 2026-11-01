@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <curl/curl.h>
 #include <fstream>
+#include <pthread.h>
 #include <sstream>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -245,25 +246,42 @@ bool IsSkippableLine(const std::string &line) {
     return false;
 }
 
+const size_t kMaxBlocklistDownloadBytes = 8u * 1024u * 1024u;
+
+struct BoundedWriteCtx {
+    std::string *out;
+    size_t cap;
+};
+
 size_t CurlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata) {
-    std::string *out = static_cast<std::string *>(userdata);
-    out->append(ptr, size * nmemb);
-    return size * nmemb;
+    BoundedWriteCtx *ctx = static_cast<BoundedWriteCtx *>(userdata);
+    size_t want = size * nmemb;
+    // out->size() never exceeds cap, so the subtraction cannot underflow.
+    if (want > ctx->cap - ctx->out->size()) {
+        // Abort the transfer: the source exceeded the size cap.
+        return 0;
+    }
+    ctx->out->append(ptr, want);
+    return want;
+}
+
+pthread_once_t g_curl_once = PTHREAD_ONCE_INIT;
+bool g_curl_ok = false;
+
+void InitCurlOnce() {
+    g_curl_ok = (curl_global_init(CURL_GLOBAL_DEFAULT) == 0);
 }
 
 bool FetchUrl(const std::string &url, std::string *out, std::string *err) {
     if (!out) {
         return false;
     }
-    static bool curl_inited = false;
-    if (!curl_inited) {
-        if (curl_global_init(CURL_GLOBAL_DEFAULT) != 0) {
-            if (err) {
-                *err = "curl_global_init failed";
-            }
-            return false;
+    pthread_once(&g_curl_once, InitCurlOnce);
+    if (!g_curl_ok) {
+        if (err) {
+            *err = "curl_global_init failed";
         }
-        curl_inited = true;
+        return false;
     }
     CURL *curl = curl_easy_init();
     if (!curl) {
@@ -273,11 +291,22 @@ bool FetchUrl(const std::string &url, std::string *out, std::string *err) {
         return false;
     }
     out->clear();
+    BoundedWriteCtx ctx;
+    ctx.out = out;
+    ctx.cap = kMaxBlocklistDownloadBytes;
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 4L);
+    curl_easy_setopt(curl, CURLOPT_PROTOCOLS,
+                     static_cast<long>(CURLPROTO_HTTP | CURLPROTO_HTTPS |
+                                       CURLPROTO_FILE));
+    curl_off_t max_download = static_cast<curl_off_t>(kMaxBlocklistDownloadBytes);
+
+    curl_easy_setopt(curl, CURLOPT_MAXFILESIZE_LARGE, max_download);
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, out);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ctx);
     CURLcode res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
     if (res != CURLE_OK) {

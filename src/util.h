@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include <netinet/in.h>
+
 namespace gravastar {
 
 enum LogLevel {
@@ -17,6 +19,13 @@ std::string Trim(const std::string &s);
 std::string ToLower(const std::string &s);
 std::vector<std::string> Split(const std::string &s, char delim);
 bool StartsWith(const std::string &s, const std::string &prefix);
+// Replace characters that would break a space-separated single-line log field
+// (control characters, space, DEL) with '_'.
+std::string SanitizeLogField(const std::string &s);
+// True if the client address matches any entry in `allowed` (exact IPv4 or
+// CIDR notation). An empty list allows every client.
+bool ClientAllowed(const struct sockaddr_in &client,
+                   const std::vector<std::string> &allowed);
 void SetDebugEnabled(bool enabled);
 bool DebugEnabled();
 void DebugLog(const std::string &msg);

@@ -18,6 +18,8 @@ fi
 
 GRAVASTAR_BIN="$1"
 PORT=18056
+# High port so the mock upstream needs no root; gravastar accepts addr:port.
+MOCK_PORT="${MOCK_PORT:-15353}"
 WORKDIR="$(mktemp -d)"
 LOGDIR="$WORKDIR/logs"
 MOCK_LOG="$WORKDIR/mock_upstream.log"
@@ -47,18 +49,19 @@ type = "A"
 value = "192.168.0.1"
 CONF
 
-cat > "$WORKDIR/upstreams.toml" <<'CONF'
-udp_servers = ["127.0.0.1"]
+cat > "$WORKDIR/upstreams.toml" <<CONF
+udp_servers = ["127.0.0.1:${MOCK_PORT}"]
 CONF
 
 cat > "$WORKDIR/mock_dns.py" <<'PY'
 #!/usr/bin/env python3
+import os
 import socket
 import struct
 import sys
 
 BIND_ADDR = "127.0.0.1"
-BIND_PORT = 53
+BIND_PORT = int(os.environ.get("MOCK_DNS_PORT", "53"))
 RDATA = bytes([192, 168, 50, 9])
 
 
@@ -133,7 +136,7 @@ CONF
 
 start_mock_upstream() {
   : > "$MOCK_LOG"
-  python3 "$WORKDIR/mock_dns.py" >"$MOCK_LOG" 2>&1 &
+  MOCK_DNS_PORT="$MOCK_PORT" python3 "$WORKDIR/mock_dns.py" >"$MOCK_LOG" 2>&1 &
   UPSTREAM_PID=$!
   sleep 0.2
   if ! kill -0 "$UPSTREAM_PID" 2>/dev/null; then

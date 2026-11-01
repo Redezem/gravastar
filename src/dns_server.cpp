@@ -88,7 +88,7 @@ DnsServer::DnsServer(const ServerConfig &config, Blocklist *blocklist,
                      const UpstreamResolver &resolver, QueryLogger *logger)
     : config_(config), blocklist_(blocklist), local_records_(local_records),
       cache_(cache), resolver_(resolver), logger_(logger), sock_(-1),
-      running_(false), worker_count_(4) {
+      running_(false), worker_count_(4), dropped_jobs_(0) {
   pthread_mutex_init(&queue_mutex_, NULL);
   pthread_cond_init(&queue_cv_, NULL);
   pthread_mutex_init(&cache_mutex_, NULL);
@@ -185,6 +185,10 @@ bool DnsServer::Run() {
       if (received == 0) {
         continue;
       }
+      if (!IsClientAllowed(client_addr)) {
+        DebugLog("Query from non-allowed client dropped");
+        continue;
+      }
       if (DebugEnabled()) {
         char addr_buf[INET_ADDRSTRLEN];
         const char *addr_str = inet_ntop(AF_INET, &client_addr.sin_addr,
@@ -206,6 +210,10 @@ bool DnsServer::Run() {
   close(sock);
   sock_ = -1;
   return true;
+}
+
+bool DnsServer::IsClientAllowed(const struct sockaddr_in &client_addr) const {
+    return ClientAllowed(client_addr, config_.allowed_clients);
 }
 
 bool DnsServer::HandleQuery(int sock, const std::vector<unsigned char> &packet,
@@ -327,12 +335,30 @@ bool DnsServer::ResolveQuery(const std::vector<unsigned char> &packet,
   }
 
   result->source = RESOLVE_UPSTREAM;
+  bool upstream_ok = false;
   if (resolver_.ResolveDot(packet, &result->response, &result->upstream)) {
     DebugLog("DoT resolution success");
-  } else if (resolver_.ResolveUdp(packet, &result->response, &result->upstream)) {
-    DebugLog("Upstream resolution success");
+    upstream_ok = true;
+  } else if ((config_.allow_udp_fallback || !resolver_.HasDotServers()) &&
+             resolver_.ResolveUdp(packet, &result->response,
+                                  &result->upstream)) {
+    // With DoT configured, plaintext fallback only happens when the operator
+    // explicitly allows it; without DoT, UDP is the primary path, not a
+    // downgrade.
+    DebugLog("Upstream (plaintext UDP) resolution success");
+    upstream_ok = true;
   } else {
     DebugLog("Upstream resolution failed");
+    result->response.clear();
+    result->upstream.clear();
+  }
+  if (upstream_ok && !ValidateResponseMatchesQuery(result->response, packet)) {
+    LogWarn("Upstream response did not match query (id/question); discarding");
+    upstream_ok = false;
+    result->response.clear();
+    result->upstream.clear();
+  }
+  if (!upstream_ok) {
     result->response = BuildEmptyResponse(header, question);
   }
   if (!result->response.empty() && config_.rebind_protection) {
@@ -346,7 +372,21 @@ bool DnsServer::ResolveQuery(const std::vector<unsigned char> &packet,
   }
   if (!result->response.empty() && cache_) {
     pthread_mutex_lock(&cache_mutex_);
-    cache_->Put(key, result->response);
+    if (upstream_ok) {
+      // Honour the upstream response's own TTL, capped by the configured
+      // maximum, instead of always caching for the configured TTL.
+      unsigned int ttl = 0;
+      if (GetResponseMinRecordTtl(result->response, &ttl)) {
+        if (ttl > config_.cache_ttl_sec) {
+          ttl = config_.cache_ttl_sec;
+        }
+        cache_->Put(key, result->response, ttl);
+      } else {
+        cache_->Put(key, result->response);
+      }
+    } else {
+      cache_->Put(key, result->response);
+    }
     pthread_mutex_unlock(&cache_mutex_);
   }
   return true;
@@ -442,10 +482,24 @@ void DnsServer::StopWorkers() {
 }
 
 void DnsServer::Enqueue(const Job &job) {
+  bool dropped = false;
+  unsigned long dropped_total = 0;
   pthread_mutex_lock(&queue_mutex_);
-  queue_.push_back(job);
-  pthread_cond_signal(&queue_cv_);
+  if (queue_.size() >= config_.max_queue_jobs) {
+    dropped_jobs_++;
+    dropped_total = dropped_jobs_;
+    dropped = (dropped_jobs_ == 1 || dropped_jobs_ % 64 == 0);
+  } else {
+    queue_.push_back(job);
+    pthread_cond_signal(&queue_cv_);
+  }
   pthread_mutex_unlock(&queue_mutex_);
+  if (dropped) {
+    std::ostringstream out;
+    out << "Job queue at limit (" << config_.max_queue_jobs
+        << "); dropping queries (total dropped: " << dropped_total << ")";
+    LogWarn(out.str());
+  }
 }
 
 bool DnsServer::Dequeue(Job *job) {

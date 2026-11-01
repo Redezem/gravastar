@@ -49,6 +49,7 @@ add_library(gravastar_core
     src/dns_server.cpp
     src/local_records.cpp
     src/query_logger.cpp
+    src/sandbox.cpp
     src/upstream_blocklist.cpp
     src/upstream_resolver.cpp
     src/util.cpp
