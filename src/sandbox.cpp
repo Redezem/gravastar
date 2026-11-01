@@ -2,6 +2,9 @@
 
 #include "util.h"
 
+#include <cerrno>
+#include <cstring>
+#include <iostream>
 #include <string>
 #include <sys/stat.h>
 #include <vector>
@@ -33,7 +36,7 @@ bool ApplyOsSandbox(const std::vector<std::string> &read_paths,
             continue;
         }
         if (unveil(read_paths[i].c_str(), "r") != 0) {
-            LogError("unveil(r) failed for " + read_paths[i]);
+            std::cerr << "unveil(r) failed for " << read_paths[i] << ": " << std::strerror(errno) << "\n"; LogError("unveil(r) failed for " + read_paths[i]);
             return false;
         }
     }
@@ -43,11 +46,11 @@ bool ApplyOsSandbox(const std::vector<std::string> &read_paths,
         }
         struct stat st;
         if (stat(readwrite_paths[i].c_str(), &st) != 0) {
-            LogError("unveil(rw) target missing: " + readwrite_paths[i]);
+            std::cerr << "unveil(rw) target missing: " << readwrite_paths[i] << "\n"; LogError("unveil(rw) target missing: " + readwrite_paths[i]);
             return false;
         }
         if (unveil(readwrite_paths[i].c_str(), "rw") != 0) {
-            LogError("unveil(rw) failed for " + readwrite_paths[i]);
+            std::cerr << "unveil(rw) failed for " << readwrite_paths[i] << ": " << std::strerror(errno) << "\n"; LogError("unveil(rw) failed for " + readwrite_paths[i]);
             return false;
         }
     }
@@ -60,19 +63,19 @@ bool ApplyOsSandbox(const std::vector<std::string> &read_paths,
             continue;
         }
         if (unveil(exec_paths[i].c_str(), "x") != 0) {
-            LogError("unveil(x) failed for " + exec_paths[i]);
+            std::cerr << "unveil(x) failed for " << exec_paths[i] << ": " << std::strerror(errno) << "\n"; LogError("unveil(x) failed for " + exec_paths[i]);
             return false;
         }
     }
     if (unveil(NULL, NULL) != 0) {
-        LogError("unveil lockdown failed");
+        std::cerr << "unveil lockdown failed: " << std::strerror(errno) << "\n"; LogError("unveil lockdown failed");
         return false;
     }
     // stdio: log fds/console; rpath: config + CA reads; wpath/cpath: logs and
     // generated blocklist; inet+dns: upstream resolution; proc+exec: the
     // log-rotation fork/exec of gzip.
     if (pledge("stdio rpath wpath cpath inet dns proc exec", NULL) != 0) {
-        LogError("pledge() failed");
+        std::cerr << "pledge() failed: " << std::strerror(errno) << "\n"; LogError("pledge() failed");
         return false;
     }
     LogInfo("OpenBSD sandbox applied (unveil + pledge)");
@@ -94,20 +97,20 @@ bool DropPrivileges(const std::string &user) {
     }
     struct passwd *pw = getpwnam(user.c_str());
     if (!pw) {
-        LogError("drop_priv_user: unknown user: " + user);
+        std::cerr << "drop_priv_user: unknown user: " << user << "\n"; LogError("drop_priv_user: unknown user: " + user);
         return false;
     }
     if (geteuid() == 0) {
         if (initgroups(pw->pw_name, pw->pw_gid) != 0) {
-            LogError("drop_priv_user: initgroups failed for " + user);
+            std::cerr << "drop_priv_user: initgroups failed for " << user << ": " << std::strerror(errno) << "\n"; LogError("drop_priv_user: initgroups failed for " + user);
             return false;
         }
         if (setgid(pw->pw_gid) != 0) {
-            LogError("drop_priv_user: setgid failed for " + user);
+            std::cerr << "drop_priv_user: setgid failed for " << user << ": " << std::strerror(errno) << "\n"; LogError("drop_priv_user: setgid failed for " + user);
             return false;
         }
         if (setuid(pw->pw_uid) != 0) {
-            LogError("drop_priv_user: setuid failed for " + user);
+            std::cerr << "drop_priv_user: setuid failed for " << user << ": " << std::strerror(errno) << "\n"; LogError("drop_priv_user: setuid failed for " + user);
             return false;
         }
         LogInfo("Dropped privileges to user: " + user);
