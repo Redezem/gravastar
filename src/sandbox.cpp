@@ -46,7 +46,7 @@ bool ApplyOsSandbox(const std::vector<std::string> &read_paths,
         }
         struct stat st;
         if (stat(readwrite_paths[i].c_str(), &st) != 0) {
-            std::cerr << "unveil(rw) target missing: " << readwrite_paths[i] << "\n"; LogError("unveil(rw) target missing: " + readwrite_paths[i]);
+            std::cerr << "unveil(rw) target missing: " << readwrite_paths[i] << " (uid=" << getuid() << "): " << std::strerror(errno) << "\n"; LogError("unveil(rw) target missing: " + readwrite_paths[i]);
             return false;
         }
         if (unveil(readwrite_paths[i].c_str(), "rw") != 0) {
