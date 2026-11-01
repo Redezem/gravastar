@@ -232,7 +232,12 @@ bool ConfigLoader::LoadMainConfig(const std::string &path, ServerConfig *out, st
             }
             out->allowed_clients = v;
         } else if (key == "drop_priv_user") {
-            out->drop_priv_user = value;
+            std::string v;
+            if (!ParseQuotedString(value, &v)) {
+                std::cerr << "Invalid value for drop_priv_user: " << value << "\n";
+                return false;
+            }
+            out->drop_priv_user = v;
         } else if (key == "log_level") {
             std::string v;
             if (!ParseQuotedString(value, &v)) {
