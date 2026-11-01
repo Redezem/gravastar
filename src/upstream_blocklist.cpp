@@ -6,12 +6,14 @@
 #include <cctype>
 #include <cerrno>
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <curl/curl.h>
 #include <fstream>
 #include <pthread.h>
 #include <sstream>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
@@ -132,7 +134,10 @@ bool WriteFile(const std::string &path, const std::string &contents, std::string
     std::ofstream out(path.c_str());
     if (!out.is_open()) {
         if (err) {
-            *err = "unable to write file: " + path;
+            std::stringstream e;
+            e << "unable to write file: " << path << " (uid=" << static_cast<int>(getuid())
+              << "): " << std::strerror(errno);
+            *err = e.str();
         }
         return false;
     }
